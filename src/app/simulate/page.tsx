@@ -79,6 +79,7 @@ export default function SimulateStudioPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [artifactTab, setArtifactTab] = useState<ArtifactTab>("solidity");
   const [copiedArtifact, setCopiedArtifact] = useState(false);
+  const [mobileSimPane, setMobileSimPane] = useState<"console" | "report">("console");
 
   const executeSimulation = useCallback(async (params: SimulateInputPayload) => {
     setIsRunning(true);
@@ -128,6 +129,7 @@ export default function SimulateStudioPage() {
         setDeclaredCycles(parsedCycles);
         setJobIdHint(qJobId);
         setProgramIdHint(qProgram);
+        setMobileSimPane("report");
 
         executeSimulation({
           elfUrl: qElf,
@@ -172,6 +174,7 @@ export default function SimulateStudioPage() {
       jobId: jobIdHint,
       programId: programIdHint,
     });
+    setMobileSimPane("report");
   };
 
   const solidityCode = useMemo(
@@ -223,10 +226,50 @@ export default function SimulateStudioPage() {
 
   return (
     <div className="w-full bg-[#0B0B0A]">
+      {/* Mobile-Only Console / Report Switcher (< lg) */}
+      <div className="grid grid-cols-2 divide-x divide-[#232320] border-b border-[#232320] bg-[#111110] font-mono text-[11px] uppercase tracking-wider lg:hidden">
+        <button
+          type="button"
+          onClick={() => setMobileSimPane("console")}
+          className={cn(
+            "relative h-9 px-3 text-left transition-colors",
+            mobileSimPane === "console"
+              ? "bg-[#181816] font-semibold text-[#EDEDEC] after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:bg-[#FF5500]"
+              : "text-[#63635E] hover:bg-[#181816] hover:text-[#EDEDEC]"
+          )}
+        >
+          [01 // INPUT CONSOLE]
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileSimPane("report")}
+          className={cn(
+            "relative flex h-9 items-center justify-between px-3 text-left transition-colors",
+            mobileSimPane === "report"
+              ? "bg-[#181816] font-semibold text-[#EDEDEC] after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:bg-[#FF5500]"
+              : "text-[#63635E] hover:bg-[#181816] hover:text-[#EDEDEC]"
+          )}
+        >
+          <span className="truncate">
+            [02 // REPORT ({formatCompactCycles(totalCyclesNum)} CYC)]
+          </span>
+          {report.sizeCheck === "differs" ? (
+            <span className="ml-1 text-[#F43F5E]">▲</span>
+          ) : (
+            <span className="ml-1 text-[#10B981]">●</span>
+          )}
+        </button>
+      </div>
+
       {/* Compiler-Style Split Workbench (5 Cols Left Console / 7 Cols Right Diagnostic Report) */}
       <section className="grid min-h-[calc(100vh-7rem)] grid-cols-1 divide-y divide-[#232320] lg:grid-cols-12 lg:divide-x lg:divide-y-0">
         {/* Left 5 Columns: Job Input & Preset Console */}
-        <div className="flex flex-col divide-y divide-[#232320] bg-[#111110] lg:col-span-5">
+        <div
+          className={cn(
+            "flex flex-col divide-y divide-[#232320] bg-[#111110] lg:col-span-5",
+            mobileSimPane === "report" && "hidden lg:flex"
+          )}
+        >
           {/* Section 01 // LOAD PRESET WORKLOAD */}
           <div>
             <div className="flex items-center justify-between border-b border-[#232320] px-4 py-2.5">
@@ -454,62 +497,76 @@ export default function SimulateStudioPage() {
         </div>
 
         {/* Right 7 Columns: Diagnostic Report & Code Generator */}
-        <div className="flex flex-col bg-[#0B0B0A] lg:col-span-7">
-          {/* Top 3-Cell Diagnostic Strip */}
-          <div className="grid grid-cols-1 divide-y divide-[#232320] border-b border-[#232320] bg-[#111110] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <div
+          className={cn(
+            "flex flex-col bg-[#0B0B0A] lg:col-span-7",
+            mobileSimPane === "console" && "hidden lg:flex"
+          )}
+        >
+          {/* Top 3-Cell Diagnostic Strip (Compact 2-col on mobile, 3-col on sm+) */}
+          <div className="grid grid-cols-2 divide-x divide-y divide-[#232320] border-b border-[#232320] bg-[#111110] sm:grid-cols-3 sm:divide-y-0">
             {/* Cell 1: 01 // TOTAL CHARGED CYCLES (REPORT.CYCLES) */}
-            <div className="p-4 font-mono tabular-nums">
-              <div className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
-                01 // TOTAL CHARGED CYCLES (REPORT.CYCLES)
+            <div className="col-span-2 p-3 font-mono tabular-nums sm:col-span-1 sm:p-4">
+              <div className="flex items-center justify-between text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
+                <span>01 // TOTAL CHARGED CYCLES (REPORT.CYCLES)</span>
+                <button
+                  type="button"
+                  onClick={() => setMobileSimPane("console")}
+                  className="rounded-[2px] border border-[#232320] bg-[#181816] px-2 py-0.5 text-[10px] text-[#EDEDEC] lg:hidden"
+                >
+                  [&lt;- CONSOLE]
+                </button>
               </div>
-              <div className="mt-2 text-xl font-semibold text-[#EDEDEC]">
+              <div className="mt-1.5 text-lg font-semibold text-[#EDEDEC] sm:mt-2 sm:text-xl">
                 {totalCyclesNum.toLocaleString()}
               </div>
-              <div className="mt-1.5 text-[10px] leading-snug text-[#9A9A94]">
+              <div className="mt-1 text-[10px] leading-snug text-[#9A9A94] sm:mt-1.5">
                 {cycleBreakdownLine}
               </div>
-              <div className="mt-1 text-[10px] text-[#63635E]">
+              <div className="mt-0.5 text-[10px] text-[#63635E] sm:mt-1">
                 REC. --max-cycles: {recommendedMaxCyclesCap.toLocaleString()}
               </div>
             </div>
 
             {/* Cell 2: 02 // PEAK MEMORY & VRAM TIER */}
-            <div className="p-4 font-mono tabular-nums">
-              <div className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
+            <div className="p-3 font-mono tabular-nums sm:p-4">
+              <div className="text-[10px] font-mono uppercase tracking-[0.12em] text-[#63635E] sm:text-[11px]">
                 02 // PEAK MEMORY &amp; VRAM TIER
               </div>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-xl font-semibold text-[#EDEDEC]">
+              <div className="mt-1.5 flex flex-wrap items-baseline gap-1.5 sm:mt-2 sm:gap-2">
+                <span className="text-base font-semibold text-[#EDEDEC] sm:text-xl">
                   {report.peakVramMib.toLocaleString()} MB
                 </span>
-                <span className="text-[11px] text-[#9A9A94]">
+                <span className="text-[10px] text-[#9A9A94] sm:text-[11px]">
                   • {report.vramTierRecommendation.minVramGb}GB TIER
                 </span>
               </div>
-              <div className="mt-1.5 text-[10px] text-[#9A9A94]">
+              <div className="mt-1 text-[10px] text-[#9A9A94] sm:mt-1.5">
                 HOST RAM PEAK: {hostRamMb.toLocaleString()} MB
               </div>
             </div>
 
             {/* Cell 3: 03 // KECCAK CHARGES & EVIDENCE */}
-            <div className="p-4 font-mono tabular-nums">
-              <div className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
+            <div className="p-3 font-mono tabular-nums sm:p-4">
+              <div className="text-[10px] font-mono uppercase tracking-[0.12em] text-[#63635E] sm:text-[11px]">
                 03 // KECCAK CHARGES &amp; EVIDENCE
               </div>
-              <div className="mt-2 text-xl font-semibold text-[#EDEDEC]">
+              <div className="mt-1.5 text-base font-semibold text-[#EDEDEC] sm:mt-2 sm:text-xl">
                 {keccakChargesNum.toLocaleString()}
               </div>
-              <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1 text-[10px]">
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-1 text-[10px] sm:mt-1.5">
                 <span className="text-[#9A9A94]">{report.keccakRequests} REQ</span>
                 {hasKeccakOrEntropyWarning ? (
                   <span className="inline-flex items-center gap-1 font-medium text-[#F43F5E]">
                     <span aria-hidden="true">▲</span>
-                    <span>UNPROVABLE KECCAK WARNING</span>
+                    <span className="sm:hidden">KECCAK WARN</span>
+                    <span className="hidden sm:inline">UNPROVABLE KECCAK WARNING</span>
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 font-medium text-[#10B981]">
                     <span aria-hidden="true">●</span>
-                    <span>HOST-INPUT VERIFIED</span>
+                    <span className="sm:hidden">VERIFIED</span>
+                    <span className="hidden sm:inline">HOST-INPUT VERIFIED</span>
                   </span>
                 )}
               </div>
@@ -539,7 +596,10 @@ export default function SimulateStudioPage() {
           <div className="border-b border-[#232320]">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#232320] bg-[#111110] px-4 py-2.5 font-mono">
               <span className="inline-flex items-center text-[11px] uppercase tracking-[0.12em] text-[#63635E]">
-                <span>03 // RISC0-PUBLIC-V3 (PROTOCOL 12) 7-SEGMENT AUDIT MATRIX</span>
+                <span className="sm:hidden">03 // 7-SEGMENT AUDIT (P12)</span>
+                <span className="hidden sm:inline">
+                  03 // RISC0-PUBLIC-V3 (PROTOCOL 12) 7-SEGMENT AUDIT MATRIX
+                </span>
                 <InfoTip
                   label="What is the 7-Segment Audit (risc0-public-v3)?"
                   text="Pre-claim safety check that runs a RISC Zero guest across all 7 segment sizes (po2 16–22) to catch malicious binaries that inflate cycles or alter outputs."
@@ -576,10 +636,16 @@ export default function SimulateStudioPage() {
                   <thead>
                     <tr className="border-b border-[#232320] bg-[#111110] text-left text-[10px] uppercase tracking-[0.12em] text-[#63635E]">
                       <th className="px-3 py-2 font-medium">SEGMENT PO2</th>
-                      <th className="px-3 py-2 text-right font-medium">RAW GUEST CYCLES</th>
-                      <th className="px-3 py-2 text-right font-medium">KECCAK CHARGES</th>
+                      <th className="hidden px-3 py-2 text-right font-medium sm:table-cell">
+                        RAW GUEST CYCLES
+                      </th>
+                      <th className="hidden px-3 py-2 text-right font-medium sm:table-cell">
+                        KECCAK CHARGES
+                      </th>
                       <th className="px-3 py-2 text-right font-medium">TOTAL CHARGED</th>
-                      <th className="px-3 py-2 text-right font-medium">RAND</th>
+                      <th className="hidden px-3 py-2 text-right font-medium sm:table-cell">
+                        RAND
+                      </th>
                       <th className="px-3 py-2 font-medium">JOURNAL HASH</th>
                       <th className="px-3 py-2 text-right font-medium">STATUS</th>
                     </tr>
@@ -604,16 +670,18 @@ export default function SimulateStudioPage() {
                           )}
                         >
                           <td className="px-3 py-2 text-[#EDEDEC]">
-                            <span className="text-[#63635E]">SEG 0{idx + 1} // </span>
+                            <span className="hidden text-[#63635E] sm:inline">
+                              SEG 0{idx + 1} //{" "}
+                            </span>
                             <span className="font-semibold">PO2={row.po2}</span>
                             <span className="ml-1 text-[10px] text-[#63635E]">
                               ({(row.segmentSizeCycles / 1024).toFixed(0)}K)
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-right text-[#9A9A94]">
+                          <td className="hidden px-3 py-2 text-right text-[#9A9A94] sm:table-cell">
                             {Number(row.guestCycles).toLocaleString()}
                           </td>
-                          <td className="px-3 py-2 text-right text-[#9A9A94]">
+                          <td className="hidden px-3 py-2 text-right text-[#9A9A94] sm:table-cell">
                             {Number(row.keccakCharges).toLocaleString()}
                           </td>
                           <td
@@ -628,7 +696,7 @@ export default function SimulateStudioPage() {
                           </td>
                           <td
                             className={cn(
-                              "px-3 py-2 text-right",
+                              "hidden px-3 py-2 text-right sm:table-cell",
                               row.randomReads > 0
                                 ? "font-semibold text-[#F43F5E]"
                                 : "text-[#9A9A94]"
@@ -679,46 +747,70 @@ export default function SimulateStudioPage() {
           {/* Bottom Section: 04 // ARTIFACT & CONTRACT GENERATOR */}
           <div className="flex flex-1 flex-col">
             {/* Section Title + Flush Header Tabs + Copy Button */}
-            <div className="flex flex-wrap items-center justify-between border-b border-[#232320] bg-[#111110]">
-              <div className="flex flex-wrap items-center divide-x divide-[#232320]">
-                <span className="px-4 py-2.5 text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
+            <div className="flex flex-col divide-y divide-[#232320] border-b border-[#232320] bg-[#111110] xl:flex-row xl:items-center xl:justify-between xl:divide-y-0">
+              <div className="flex items-center justify-between px-4 py-2 xl:border-r xl:border-[#232320] xl:py-2.5">
+                <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
                   04 // ARTIFACT &amp; CONTRACT GENERATOR
                 </span>
-
-                {(
-                  [
-                    { id: "json", label: "RAW SIMULATE JSON" },
-                    { id: "solidity", label: "SOLIDITY CONTRACT (hemiprove-abi)" },
-                    { id: "viem", label: "VIEM TYPESCRIPT SDK" },
-                  ] as const
-                ).map((tab) => {
-                  const active = artifactTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => setArtifactTab(tab.id)}
-                      className={cn(
-                        "relative h-10 px-3.5 font-mono text-[11px] uppercase tracking-wider transition-colors",
-                        active
-                          ? "bg-[#181816] font-semibold text-[#EDEDEC] after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:bg-[#FF5500]"
-                          : "text-[#63635E] hover:bg-[#181816] hover:text-[#EDEDEC]"
-                      )}
-                    >
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="px-3 py-1.5">
                 <button
                   type="button"
                   onClick={handleCopyArtifact}
-                  className="h-7 rounded-[2px] border border-[#232320] bg-[#0B0B0A] px-2.5 font-mono text-[11px] uppercase tracking-wider text-[#EDEDEC] transition-colors hover:border-[#FF5500] hover:bg-[#181816]"
+                  className="h-7 rounded-[2px] border border-[#232320] bg-[#0B0B0A] px-2.5 font-mono text-[10px] uppercase tracking-wider text-[#EDEDEC] transition-colors hover:border-[#FF5500] hover:bg-[#181816] xl:hidden"
                 >
-                  {copiedArtifact ? "[COPIED TO CLIPBOARD]" : "[COPY ARTIFACT]"}
+                  {copiedArtifact ? "[COPIED]" : "[COPY]"}
                 </button>
+              </div>
+
+              <div className="flex flex-1 items-center justify-between">
+                <div className="grid w-full grid-cols-3 divide-x divide-[#232320] sm:flex sm:w-auto sm:items-center">
+                  {(
+                    [
+                      {
+                        id: "json",
+                        shortLabel: "JSON",
+                        label: "RAW SIMULATE JSON",
+                      },
+                      {
+                        id: "solidity",
+                        shortLabel: "SOLIDITY",
+                        label: "SOLIDITY CONTRACT (hemiprove-abi)",
+                      },
+                      {
+                        id: "viem",
+                        shortLabel: "VIEM SDK",
+                        label: "VIEM TYPESCRIPT SDK",
+                      },
+                    ] as const
+                  ).map((tab) => {
+                    const active = artifactTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setArtifactTab(tab.id)}
+                        className={cn(
+                          "relative h-9 px-2 font-mono text-[11px] uppercase tracking-wider transition-colors sm:h-10 sm:px-3.5",
+                          active
+                            ? "bg-[#181816] font-semibold text-[#EDEDEC] after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:bg-[#FF5500]"
+                            : "text-[#63635E] hover:bg-[#181816] hover:text-[#EDEDEC]"
+                        )}
+                      >
+                        <span className="sm:hidden">{tab.shortLabel}</span>
+                        <span className="hidden sm:inline">{tab.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden px-3 py-1.5 xl:block">
+                  <button
+                    type="button"
+                    onClick={handleCopyArtifact}
+                    className="h-7 rounded-[2px] border border-[#232320] bg-[#0B0B0A] px-2.5 font-mono text-[11px] uppercase tracking-wider text-[#EDEDEC] transition-colors hover:border-[#FF5500] hover:bg-[#181816]"
+                  >
+                    {copiedArtifact ? "[COPIED TO CLIPBOARD]" : "[COPY ARTIFACT]"}
+                  </button>
+                </div>
               </div>
             </div>
 

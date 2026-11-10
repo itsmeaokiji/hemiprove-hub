@@ -12,9 +12,9 @@ import type { HemiNetworkKey, VerifierStatusLabel } from "@/lib/hemi-chain";
 import type { MarketplaceApiResponse } from "@/lib/marketplace-data";
 
 const NAV_TABS = [
-  { href: "/", label: "[01] MARKETPLACE" },
-  { href: "/benchmarks", label: "[02] GPU BENCHMARKS" },
-  { href: "/simulate", label: "[03] SIMULATE STUDIO" },
+  { href: "/", label: "[01] MARKETPLACE", mobileLabel: "[01] MARKET" },
+  { href: "/benchmarks", label: "[02] GPU BENCHMARKS", mobileLabel: "[02] GPUS" },
+  { href: "/simulate", label: "[03] SIMULATE STUDIO", mobileLabel: "[03] SIMULATE" },
 ];
 
 function VerifierStatusIndicator({
@@ -97,17 +97,20 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-40 w-full bg-[#0B0B0A]">
       {/* 1. Top Protocol Telemetry Bar */}
-      <div className="flex h-8 items-center justify-between overflow-x-auto border-b border-[#232320] bg-[#0B0B0A] px-4 font-mono text-[11px] tabular-nums text-[#9A9A94] whitespace-nowrap">
+      <div className="flex h-7 sm:h-8 items-center justify-between overflow-x-auto border-b border-[#232320] bg-[#0B0B0A] px-2.5 sm:px-4 font-mono text-[10px] sm:text-[11px] tabular-nums text-[#9A9A94] whitespace-nowrap">
         {/* Left: Status dot, Active Chain, Router Address + Copy/Explorer, zkOP Baseline */}
-        <div className="flex items-center gap-3">
-          <span className="inline-flex items-center gap-2 text-[#EDEDEC]">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className="inline-flex items-center gap-1.5 sm:gap-2 text-[#EDEDEC]">
             <span
               className={cn(
-                "inline-block h-2 w-2 rounded-none",
+                "inline-block h-2 w-2 shrink-0 rounded-none",
                 statusOnline ? "bg-[#10B981]" : "bg-[#FF5500]"
               )}
             />
-            <span>
+            <span className="sm:hidden">
+              {networkKey === "mainnet" ? "MAINNET [43111]" : "SEPOLIA [743111]"}
+            </span>
+            <span className="hidden sm:inline">
               {networkKey === "mainnet"
                 ? "HEMI MAINNET [43111]"
                 : "HEMI SEPOLIA [743111]"}
@@ -127,7 +130,12 @@ export function Navbar() {
                   title={`Inspect Router ${deployment.router} on ${deployment.explorerUrl}`}
                   className="text-[#EDEDEC] underline decoration-[#232320] transition-colors hover:text-[#FF5500] hover:decoration-[#FF5500]"
                 >
-                  {shortenHex(deployment.router, 4, 4)} ({deployment.routerStatusTag}) ↗
+                  <span>{shortenHex(deployment.router, 4, 4)}</span>
+                  <span className="hidden sm:inline">
+                    {" "}
+                    ({deployment.routerStatusTag})
+                  </span>{" "}
+                  ↗
                 </a>
                 <button
                   type="button"
@@ -143,7 +151,10 @@ export function Navbar() {
                 </button>
               </>
             ) : (
-              <span className="text-[#9A9A94]">{deployment.routerStatusTag}</span>
+              <span className="text-[#9A9A94]">
+                <span className="sm:hidden">STAGED</span>
+                <span className="hidden sm:inline">{deployment.routerStatusTag}</span>
+              </span>
             )}
           </span>
 
@@ -198,15 +209,15 @@ export function Navbar() {
       </div>
 
       {/* 2. Main Workbench Header */}
-      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-[#232320] bg-[#111110] px-4 py-1.5 md:py-0">
+      <div className="flex min-h-10 md:min-h-12 items-center justify-between gap-1.5 border-b border-[#232320] bg-[#111110] px-2.5 sm:px-4 py-1 md:py-0">
         {/* Left: Wordmark + Flush Vertical-Divider Navigation Tabs */}
-        <div className="flex h-full items-center">
+        <div className="flex h-full shrink-0 items-center">
           <Link
             href="/"
-            className="flex h-9 items-center border-r border-[#232320] pr-4 font-mono text-xs font-semibold tracking-tight text-[#EDEDEC] md:h-12 md:pr-5 sm:text-sm"
+            className="flex h-8 items-center border-r border-[#232320] pr-2.5 font-mono text-[11px] font-semibold tracking-tight text-[#EDEDEC] sm:h-9 sm:pr-4 sm:text-sm md:h-12 md:pr-5"
           >
             <span>HEMIPROVE</span>
-            <span className="mx-1.5 text-[#63635E]">//</span>
+            <span className="mx-1 sm:mx-1.5 text-[#63635E]">//</span>
             <span className="text-[#EDEDEC]">HUB</span>
           </Link>
 
@@ -232,8 +243,8 @@ export function Navbar() {
           </nav>
         </div>
 
-        {/* Right: Physical-Style Segmented Hardware Switches (Visible Across All Screen Sizes) */}
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+        {/* Right: Physical-Style Segmented Hardware Switches (Single Compact Row on Mobile) */}
+        <div className="flex items-center gap-1 sm:gap-2">
           {/* Chain Switcher (Sepolia 743111 default first, Mainnet 43111 second) */}
           <div className="flex items-center rounded-[2px] border border-[#232320] bg-[#0B0B0A] p-0.5 font-mono text-[10px] sm:text-[11px] tabular-nums">
             {(["sepolia", "mainnet"] as HemiNetworkKey[]).map((key) => {
@@ -244,13 +255,18 @@ export function Navbar() {
                   type="button"
                   onClick={() => setNetworkKey(key)}
                   className={cn(
-                    "rounded-[2px] px-2 sm:px-2.5 py-1 uppercase tracking-wider transition-colors",
+                    "rounded-[2px] px-1.5 sm:px-2.5 py-1 uppercase tracking-wider transition-colors",
                     active
                       ? "bg-[#FF5500] font-semibold text-[#0B0B0A]"
                       : "text-[#9A9A94] hover:text-[#EDEDEC]"
                   )}
                 >
-                  {key === "sepolia" ? "SEPOLIA 743111" : "MAINNET 43111"}
+                  <span className="sm:hidden">
+                    {key === "sepolia" ? "743111" : "43111"}
+                  </span>
+                  <span className="hidden sm:inline">
+                    {key === "sepolia" ? "SEPOLIA 743111" : "MAINNET 43111"}
+                  </span>
                 </button>
               );
             })}
@@ -258,14 +274,14 @@ export function Navbar() {
 
           {/* DATA: LIVE / DEMO Switch (Visible on ALL screen sizes) */}
           <div className="flex items-center rounded-[2px] border border-[#232320] bg-[#0B0B0A] p-0.5 font-mono text-[10px] sm:text-[11px]">
-            <span className="px-1.5 sm:px-2 text-[10px] uppercase tracking-wider text-[#63635E]">
+            <span className="hidden px-1.5 text-[10px] uppercase tracking-wider text-[#63635E] sm:inline sm:px-2">
               DATA:
             </span>
             <button
               type="button"
               onClick={() => setLiveStreamEnabled(false)}
               className={cn(
-                "rounded-[2px] px-2 py-1 uppercase tracking-wider transition-colors",
+                "rounded-[2px] px-1.5 sm:px-2 py-1 uppercase tracking-wider transition-colors",
                 !liveStreamEnabled
                   ? "bg-[#181816] font-semibold text-[#EDEDEC] shadow-[inset_0_-1px_0_0_#FF5500]"
                   : "text-[#63635E] hover:text-[#9A9A94]"
@@ -277,7 +293,7 @@ export function Navbar() {
               type="button"
               onClick={() => setLiveStreamEnabled(true)}
               className={cn(
-                "rounded-[2px] px-2 py-1 uppercase tracking-wider transition-colors",
+                "rounded-[2px] px-1.5 sm:px-2 py-1 uppercase tracking-wider transition-colors",
                 liveStreamEnabled
                   ? "bg-[#181816] font-semibold text-[#EDEDEC] shadow-[inset_0_-1px_0_0_#FF5500]"
                   : "text-[#63635E] hover:text-[#9A9A94]"
@@ -319,13 +335,14 @@ export function Navbar() {
               key={tab.href}
               href={tab.href}
               className={cn(
-                "relative flex h-9 items-center justify-center font-mono text-[10px] uppercase tracking-wider",
+                "relative flex h-9 items-center justify-center px-1 font-mono text-[10px] sm:text-[11px] uppercase tracking-wider",
                 isActive
-                  ? "bg-[#181816] text-[#EDEDEC] after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:bg-[#FF5500]"
+                  ? "bg-[#181816] font-semibold text-[#EDEDEC] after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:bg-[#FF5500]"
                   : "text-[#9A9A94]"
               )}
             >
-              {tab.label}
+              <span className="sm:hidden">{tab.mobileLabel}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
             </Link>
           );
         })}

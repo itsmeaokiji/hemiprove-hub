@@ -67,6 +67,7 @@ export default function BenchmarksPage() {
 
   const [communityEntries, setCommunityEntries] = useState<BenchmarkEntry[]>([]);
   const [railMode, setRailMode] = useState<RailMode>("roi");
+  const [mobileView, setMobileView] = useState<"table" | "rail">("table");
 
   // Filters & Sorting
   const [vendorFilter, setVendorFilter] = useState<"ALL" | GpuVendor>("ALL");
@@ -342,6 +343,7 @@ export default function BenchmarksPage() {
       `● APPENDED: ${newEntry.model.toUpperCase()} // ${newEntry.zkops.toLocaleString()} zkOP/s`
     );
     setRailMode("roi");
+    setMobileView("rail");
     setTimeout(() => setStatusBanner(null), 5000);
   };
 
@@ -349,11 +351,11 @@ export default function BenchmarksPage() {
 
   return (
     <div className="w-full bg-[#0B0B0A]">
-      {/* 1. Top Filter & Hardware Summary Strip (Quiet Unselected Filter Pills) */}
-      <section className="flex flex-wrap items-center justify-between gap-2 border-b border-[#232320] bg-[#111110] px-4 py-2.5">
-        <div className="flex flex-wrap items-center gap-1 font-mono text-[11px]">
+      {/* 1. Top Filter & Hardware Summary Strip (Swipeable filter pills on mobile, full-width search below) */}
+      <section className="flex flex-col gap-2 border-b border-[#232320] bg-[#111110] px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-4 sm:py-2.5">
+        <div className="flex w-full items-center gap-1 overflow-x-auto whitespace-nowrap font-mono text-[11px] sm:w-auto sm:flex-wrap">
           {/* Vendor Filter */}
-          <div className="flex items-center gap-0.5">
+          <div className="flex shrink-0 items-center gap-0.5">
             {(
               [
                 { key: "ALL", label: "ALL" },
@@ -369,7 +371,7 @@ export default function BenchmarksPage() {
                   type="button"
                   onClick={() => setVendorFilter(v.key)}
                   className={cn(
-                    "rounded-[2px] px-2 py-1 uppercase tracking-wider transition-colors",
+                    "shrink-0 rounded-[2px] px-2 py-1 uppercase tracking-wider transition-colors",
                     active
                       ? "bg-[#181816] font-semibold text-[#EDEDEC] shadow-[inset_0_-1px_0_0_#FF5500]"
                       : "text-[#63635E] hover:text-[#EDEDEC]"
@@ -381,10 +383,10 @@ export default function BenchmarksPage() {
             })}
           </div>
 
-          <span className="mx-1.5 h-3.5 w-px bg-[#232320]" aria-hidden="true" />
+          <span className="mx-1 h-3.5 w-px shrink-0 bg-[#232320] sm:mx-1.5" aria-hidden="true" />
 
           {/* OS Filter */}
-          <div className="flex items-center gap-0.5">
+          <div className="flex shrink-0 items-center gap-0.5">
             {(
               [
                 { key: "ALL", label: "ALL OS" },
@@ -399,7 +401,7 @@ export default function BenchmarksPage() {
                   type="button"
                   onClick={() => setOsFilter(os.key)}
                   className={cn(
-                    "rounded-[2px] px-2 py-1 uppercase tracking-wider transition-colors",
+                    "shrink-0 rounded-[2px] px-2 py-1 uppercase tracking-wider transition-colors",
                     active
                       ? "bg-[#181816] font-semibold text-[#EDEDEC] shadow-[inset_0_-1px_0_0_#FF5500]"
                       : "text-[#63635E] hover:text-[#EDEDEC]"
@@ -411,10 +413,10 @@ export default function BenchmarksPage() {
             })}
           </div>
 
-          <span className="mx-1.5 h-3.5 w-px bg-[#232320]" aria-hidden="true" />
+          <span className="mx-1 h-3.5 w-px shrink-0 bg-[#232320] sm:mx-1.5" aria-hidden="true" />
 
           {/* zkVM Filter */}
-          <div className="flex items-center gap-0.5">
+          <div className="flex shrink-0 items-center gap-0.5">
             {(
               [
                 { key: "ALL", label: "ALL ZKVM" },
@@ -429,7 +431,7 @@ export default function BenchmarksPage() {
                   type="button"
                   onClick={() => setZkvmFilter(vm.key)}
                   className={cn(
-                    "rounded-[2px] px-2 py-1 uppercase tracking-wider transition-colors",
+                    "shrink-0 rounded-[2px] px-2 py-1 uppercase tracking-wider transition-colors",
                     active
                       ? "bg-[#181816] font-semibold text-[#EDEDEC] shadow-[inset_0_-1px_0_0_#FF5500]"
                       : "text-[#63635E] hover:text-[#EDEDEC]"
@@ -441,13 +443,13 @@ export default function BenchmarksPage() {
             })}
           </div>
 
-          <span className="mx-1.5 h-3.5 w-px bg-[#232320]" aria-hidden="true" />
+          <span className="mx-1 h-3.5 w-px shrink-0 bg-[#232320] sm:mx-1.5" aria-hidden="true" />
 
           {/* Sort Selector */}
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortKey)}
-            className="h-7 rounded-[2px] border border-[#232320] bg-[#0B0B0A] px-2 font-mono text-[11px] uppercase text-[#9A9A94] focus:border-[#FF5500] focus:outline-none"
+            className="h-7 shrink-0 rounded-[2px] border border-[#232320] bg-[#0B0B0A] px-2 font-mono text-[11px] uppercase text-[#9A9A94] focus:border-[#FF5500] focus:outline-none"
           >
             <option value="zkops">SORT: ZKOP/S DESC</option>
             <option value="efficiency">SORT: ZKOP/WATT</option>
@@ -456,15 +458,23 @@ export default function BenchmarksPage() {
           </select>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="SEARCH ARCH / GPU..."
-            className="h-7 w-40 sm:w-48 text-[11px]"
+            className="h-7 flex-1 sm:w-48 sm:flex-none text-[11px]"
           />
-          <Button size="sm" onClick={() => setRailMode("submit")}>
-            [+ SUBMIT ZKMINER BENCHMARK]
+          <Button
+            size="sm"
+            className="shrink-0"
+            onClick={() => {
+              setRailMode("submit");
+              setMobileView("rail");
+            }}
+          >
+            <span className="sm:hidden">[+ SUBMIT CLI]</span>
+            <span className="hidden sm:inline">[+ SUBMIT ZKMINER BENCHMARK]</span>
           </Button>
         </div>
       </section>
@@ -475,17 +485,68 @@ export default function BenchmarksPage() {
         </div>
       )}
 
+      {/* Mobile Master-Detail Panel Switcher (< lg) */}
+      <div className="grid grid-cols-3 divide-x divide-[#232320] border-b border-[#232320] bg-[#111110] font-mono text-[10px] sm:text-[11px] tabular-nums lg:hidden">
+        <button
+          type="button"
+          onClick={() => setMobileView("table")}
+          className={cn(
+            "relative h-9 px-1.5 uppercase tracking-wider transition-colors",
+            mobileView === "table"
+              ? "bg-[#181816] font-semibold text-[#EDEDEC] after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:bg-[#FF5500]"
+              : "text-[#63635E] hover:text-[#EDEDEC]"
+          )}
+        >
+          [01 // GPUS ({filteredEntries.length})]
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setRailMode("roi");
+            setMobileView("rail");
+          }}
+          className={cn(
+            "relative h-9 truncate px-1.5 uppercase tracking-wider transition-colors",
+            mobileView === "rail" && railMode === "roi"
+              ? "bg-[#181816] font-semibold text-[#EDEDEC] after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:bg-[#FF5500]"
+              : "text-[#63635E] hover:text-[#EDEDEC]"
+          )}
+        >
+          [02 // ROI: {selectedGpu.shortModel}]
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setRailMode("submit");
+            setMobileView("rail");
+          }}
+          className={cn(
+            "relative h-9 px-1.5 uppercase tracking-wider transition-colors",
+            mobileView === "rail" && railMode === "submit"
+              ? "bg-[#181816] font-semibold text-[#EDEDEC] after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:bg-[#FF5500]"
+              : "text-[#63635E] hover:text-[#EDEDEC]"
+          )}
+        >
+          [03 // SUBMIT CLI]
+        </button>
+      </div>
+
       {/* 2. Main Split Workbench (8 Cols GPU Datasheet Table / 4 Cols Docked Control Rail) */}
       <section className="grid min-h-[calc(100vh-10rem)] grid-cols-1 divide-y divide-[#232320] lg:grid-cols-12 lg:divide-x lg:divide-y-0">
         {/* Left 8 Columns: Geekbench/Oxide-Style GPU Datasheet Table */}
-        <div className="overflow-x-auto bg-[#0B0B0A] lg:col-span-8">
+        <div
+          className={cn(
+            "overflow-x-auto bg-[#0B0B0A] lg:col-span-8",
+            mobileView === "rail" && "hidden lg:block"
+          )}
+        >
           <table className="w-full border-collapse font-mono text-xs tabular-nums">
             <thead>
               <tr className="border-b border-[#232320] bg-[#111110] text-left text-[10px] uppercase tracking-[0.12em] text-[#63635E]">
-                <th className="px-3 py-2.5 font-medium">RANK</th>
-                <th className="px-3 py-2.5 font-medium">GPU MODEL &amp; ARCH</th>
-                <th className="px-3 py-2.5 font-medium">BACKEND / OS</th>
-                <th className="min-w-[195px] px-3 py-2.5 font-medium">
+                <th className="px-2.5 sm:px-3 py-2.5 font-medium">RANK</th>
+                <th className="px-2.5 sm:px-3 py-2.5 font-medium">GPU MODEL &amp; ARCH</th>
+                <th className="px-2.5 sm:px-3 py-2.5 font-medium">BACKEND / OS</th>
+                <th className="min-w-[145px] sm:min-w-[195px] px-2.5 sm:px-3 py-2.5 font-medium">
                   <span className="inline-flex items-center">
                     <span>UNIFIED SCORE (zkOP/s)</span>
                     <InfoTip
@@ -494,10 +555,10 @@ export default function BenchmarksPage() {
                     />
                   </span>
                 </th>
-                <th className="px-3 py-2.5 text-right font-medium">SHA256</th>
-                <th className="px-3 py-2.5 text-right font-medium">CHACHA</th>
-                <th className="px-3 py-2.5 text-right font-medium">ECDSA</th>
-                <th className="px-3 py-2.5 text-right font-medium">BIGINT</th>
+                <th className="hidden sm:table-cell px-3 py-2.5 text-right font-medium">SHA256</th>
+                <th className="hidden sm:table-cell px-3 py-2.5 text-right font-medium">CHACHA</th>
+                <th className="hidden sm:table-cell px-3 py-2.5 text-right font-medium">ECDSA</th>
+                <th className="hidden sm:table-cell px-3 py-2.5 text-right font-medium">BIGINT</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#232320]">
@@ -515,6 +576,7 @@ export default function BenchmarksPage() {
                     onClick={() => {
                       setSelectedGpuId(entry.id);
                       if (railMode !== "roi") setRailMode("roi");
+                      setMobileView("rail");
                     }}
                     className={cn(
                       "cursor-pointer transition-colors hover:bg-[#181816]",
@@ -524,12 +586,12 @@ export default function BenchmarksPage() {
                     )}
                   >
                     {/* RANK */}
-                    <td className="px-3 py-3 align-top text-[#63635E]">
+                    <td className="px-2.5 sm:px-3 py-3 align-top text-[#63635E]">
                       {String(idx + 1).padStart(2, "0")}
                     </td>
 
                     {/* GPU MODEL & ARCH (borderless datasheet metadata) */}
-                    <td className="px-3 py-3 align-top">
+                    <td className="px-2.5 sm:px-3 py-3 align-top">
                       <div className="font-semibold text-[#EDEDEC]">
                         {entry.shortModel}
                       </div>
@@ -547,7 +609,7 @@ export default function BenchmarksPage() {
                     </td>
 
                     {/* BACKEND / OS (borderless dot indicator) */}
-                    <td className="px-3 py-3 align-top">
+                    <td className="px-2.5 sm:px-3 py-3 align-top">
                       <VendorIndicator vendor={entry.vendor} stack={entry.computeStack} />
                       <div className="mt-1 text-[10px] uppercase text-[#9A9A94]">
                         {entry.zkvm.toUpperCase()} • {entry.os.toUpperCase()} • PO2=
@@ -556,9 +618,9 @@ export default function BenchmarksPage() {
                     </td>
 
                     {/* UNIFIED SCORE (zkOP/s) + Inline Proportion Bar */}
-                    <td className="px-3 py-3 align-top">
+                    <td className="px-2.5 sm:px-3 py-3 align-top">
                       <div className="flex items-baseline justify-between gap-2">
-                        <span className="text-sm font-semibold text-[#EDEDEC]">
+                        <span className="text-xs sm:text-sm font-semibold text-[#EDEDEC]">
                           {entry.zkops.toLocaleString()}
                         </span>
                         <span className="text-[10px] text-[#63635E]">
@@ -571,19 +633,23 @@ export default function BenchmarksPage() {
                           style={{ width: `${pctOfMax}%` }}
                         />
                       </div>
+                      <div className="mt-1 flex items-center justify-between text-[9px] text-[#9A9A94] sm:hidden">
+                        <span>SHA: {entry.workloads["sha256-chain"].toFixed(1)}s</span>
+                        <span>CHACHA: {entry.workloads["chacha-mix"].toFixed(1)}s</span>
+                      </div>
                     </td>
 
                     {/* Individual Workload Timings in Seconds */}
-                    <td className="px-3 py-3 text-right align-top text-[#EDEDEC]">
+                    <td className="hidden sm:table-cell px-3 py-3 text-right align-top text-[#EDEDEC]">
                       {entry.workloads["sha256-chain"].toFixed(1)}s
                     </td>
-                    <td className="px-3 py-3 text-right align-top text-[#EDEDEC]">
+                    <td className="hidden sm:table-cell px-3 py-3 text-right align-top text-[#EDEDEC]">
                       {entry.workloads["chacha-mix"].toFixed(2)}s
                     </td>
-                    <td className="px-3 py-3 text-right align-top text-[#9A9A94]">
+                    <td className="hidden sm:table-cell px-3 py-3 text-right align-top text-[#9A9A94]">
                       {entry.workloads["ecdsa-verify"].toFixed(2)}s
                     </td>
-                    <td className="px-3 py-3 text-right align-top text-[#9A9A94]">
+                    <td className="hidden sm:table-cell px-3 py-3 text-right align-top text-[#9A9A94]">
                       {entry.workloads["bigint-mul"].toFixed(2)}s
                     </td>
                   </tr>
@@ -594,7 +660,12 @@ export default function BenchmarksPage() {
         </div>
 
         {/* Right 4 Columns: Docked Control Rail with Two Modes */}
-        <aside className="flex flex-col bg-[#111110] lg:col-span-4">
+        <aside
+          className={cn(
+            "flex flex-col bg-[#111110] lg:col-span-4",
+            mobileView === "table" && "hidden lg:flex"
+          )}
+        >
           {/* Mode Switch Header */}
           <div className="grid grid-cols-2 divide-x divide-[#232320] border-b border-[#232320] font-mono text-[11px]">
             <button
@@ -627,13 +698,22 @@ export default function BenchmarksPage() {
             <div className="flex flex-col divide-y divide-[#232320] font-mono text-xs tabular-nums">
               {/* Selected Hardware Telemetry Header */}
               <div className="space-y-2 p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
                     01 // SELECTED HARDWARE UNIT
                   </span>
-                  <span className="text-[10px] text-[#9A9A94]">
-                    CHAIN: {deployment.chainId}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-[#9A9A94]">
+                      CHAIN: {deployment.chainId}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setMobileView("table")}
+                      className="rounded-[2px] border border-[#232320] bg-[#0B0B0A] px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#9A9A94] hover:text-[#EDEDEC] lg:hidden"
+                    >
+                      [&lt;- TABLE]
+                    </button>
+                  </div>
                 </div>
                 <select
                   value={selectedGpu.id}

@@ -69,6 +69,7 @@ export default function MarketplacePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [mobilePane, setMobilePane] = useState<"table" | "inspector">("table");
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -200,54 +201,54 @@ export default function MarketplacePage() {
 
   return (
     <div className="w-full bg-[#0B0B0A]">
-      {/* 1. Top 4-Cell Flush Metric Strip (Zero gaps, zero rounded corners, zero icons) */}
-      <section className="grid grid-cols-1 divide-y divide-[#232320] border-b border-[#232320] bg-[#111110] md:grid-cols-4 md:divide-x md:divide-y-0">
+      {/* 1. Top 4-Cell Flush Metric Strip (2x2 on mobile, 4-col on desktop, zero gaps, zero rounded corners) */}
+      <section className="grid grid-cols-2 divide-x divide-y divide-[#232320] border-b border-[#232320] bg-[#111110] md:grid-cols-4 md:divide-y-0">
         {/* Cell 1: 01 // TOTAL PROVING JOBS */}
-        <div className="px-5 py-4">
-          <div className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
+        <div className="p-3 sm:px-5 sm:py-4">
+          <div className="text-[10px] sm:text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
             01 // TOTAL PROVING JOBS
           </div>
-          <div className="mt-2 font-mono text-2xl font-semibold tabular-nums text-[#EDEDEC]">
+          <div className="mt-1.5 sm:mt-2 font-mono text-lg sm:text-2xl font-semibold tabular-nums text-[#EDEDEC]">
             {isLiveStagedMainnet ? (
               <span>
-                0 <span className="text-sm font-normal text-[#63635E]">(STAGED)</span>
+                0 <span className="text-xs sm:text-sm font-normal text-[#63635E]">(STAGED)</span>
               </span>
             ) : (
               kpis.totalJobs.toLocaleString()
             )}
           </div>
-          <div className="mt-1.5 flex items-center justify-between font-mono text-[11px] tabular-nums text-[#9A9A94]">
+          <div className="mt-1 sm:mt-1.5 flex flex-wrap items-center justify-between gap-1 font-mono text-[10px] sm:text-[11px] tabular-nums text-[#9A9A94]">
             <span>
-              ESCROW PAID: {kpis.totalPaidHemi.toLocaleString()} {tokenSymbolLabel}
+              PAID: {kpis.totalPaidHemi.toLocaleString()} {tokenSymbolLabel}
             </span>
             <span className="text-[#63635E]">
               {isLiveStagedMainnet
-                ? "PRE-DEPLOYMENT"
+                ? "PRE-DEPLOY"
                 : `${kpis.activeProvers} PROVERS`}
             </span>
           </div>
         </div>
 
         {/* Cell 2: 02 // ACTIVE ESCALATING AUCTIONS */}
-        <div className="px-5 py-4">
-          <div className="flex items-center text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
-            <span>02 // ACTIVE ESCALATING AUCTIONS</span>
+        <div className="p-3 sm:px-5 sm:py-4">
+          <div className="flex items-center text-[10px] sm:text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
+            <span className="truncate">02 // ACTIVE AUCTIONS</span>
             <InfoTip
               label="What is an Escalating Offer (Dutch Ramp)?"
               text="Each job's HEMI reward starts at a minimum offer and ramps up over time until the first staked GPU prover claims and fulfills it."
             />
           </div>
-          <div className="mt-2 flex items-baseline justify-between gap-3">
-            <span className="font-mono text-2xl font-semibold tabular-nums text-[#EDEDEC]">
+          <div className="mt-1.5 sm:mt-2 flex items-baseline justify-between gap-2">
+            <span className="font-mono text-lg sm:text-2xl font-semibold tabular-nums text-[#EDEDEC]">
               {isLiveStagedMainnet ? (
                 <span>
-                  0 <span className="text-sm font-normal text-[#63635E]">(STAGED)</span>
+                  0 <span className="text-xs sm:text-sm font-normal text-[#63635E]">(STAGED)</span>
                 </span>
               ) : (
                 kpis.activeAuctions
               )}
             </span>
-            <span className="font-mono text-[11px] uppercase tabular-nums text-[#9A9A94]">
+            <span className="hidden sm:inline font-mono text-[11px] uppercase tabular-nums text-[#9A9A94]">
               {isLiveStagedMainnet
                 ? "ROUTER STAGED"
                 : kpis.activeAuctions > 0
@@ -256,7 +257,7 @@ export default function MarketplacePage() {
             </span>
           </div>
           {/* Inline segmented activity bar */}
-          <div className="mt-2.5 grid grid-cols-12 gap-1">
+          <div className="mt-2 sm:mt-2.5 grid grid-cols-12 gap-0.5 sm:gap-1">
             {Array.from({ length: 12 }, (_, idx) => {
               const activeSeg = idx < litSegments;
               return (
@@ -273,23 +274,23 @@ export default function MarketplacePage() {
         </div>
 
         {/* Cell 3: 03 // PROOF DIVERSITY (2-OF-3) */}
-        <div className="px-5 py-4">
-          <div className="flex items-center justify-between">
-            <span className="inline-flex items-center text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
-              <span>03 // PROOF DIVERSITY (2-OF-3)</span>
+        <div className="p-3 sm:px-5 sm:py-4">
+          <div className="flex items-center justify-between gap-1">
+            <span className="inline-flex items-center text-[10px] sm:text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
+              <span className="truncate">03 // PROOF DIVERSITY</span>
               <InfoTip
                 label="What is 2-of-3 Proof Diversity?"
                 text="High-value settlements can require independent proofs from at least 2 of 3 zkVMs (RISC Zero, SP1, OpenVM) so no single prover bug compromises funds."
               />
             </span>
-            <span className="font-mono text-[10px] tabular-nums text-[#9A9A94]">
+            <span className="hidden sm:inline font-mono text-[10px] tabular-nums text-[#9A9A94]">
               {isLiveStagedMainnet
                 ? "STAGED"
                 : `${kpis.diversitySplit.multiProofBundles}% MULTI`}
             </span>
           </div>
           {/* Compact horizontal stacked bar */}
-          <div className="mt-3 flex h-2 w-full overflow-hidden rounded-none bg-[#232320]">
+          <div className="mt-2.5 sm:mt-3 flex h-2 w-full overflow-hidden rounded-none bg-[#232320]">
             <div
               style={{ width: `${kpis.diversitySplit.risc0}%` }}
               className="h-full bg-[#EDEDEC]"
@@ -306,10 +307,10 @@ export default function MarketplacePage() {
               title={`OPENVM: ${kpis.diversitySplit.openvm}%`}
             />
           </div>
-          <div className="mt-2 flex items-center justify-between font-mono text-[11px] tabular-nums text-[#9A9A94]">
+          <div className="mt-1.5 sm:mt-2 flex items-center justify-between font-mono text-[9px] sm:text-[11px] tabular-nums text-[#9A9A94]">
             <span>
               <span className="mr-1 inline-block h-1.5 w-1.5 bg-[#EDEDEC] align-middle" />
-              RISC0 {kpis.diversitySplit.risc0}%
+              R0 {kpis.diversitySplit.risc0}%
             </span>
             <span>
               <span className="mr-1 inline-block h-1.5 w-1.5 bg-[#FF5500] align-middle" />
@@ -317,35 +318,36 @@ export default function MarketplacePage() {
             </span>
             <span>
               <span className="mr-1 inline-block h-1.5 w-1.5 bg-[#63635E] align-middle" />
-              OPENVM {kpis.diversitySplit.openvm}%
+              OVM {kpis.diversitySplit.openvm}%
             </span>
           </div>
         </div>
 
         {/* Cell 4: 04 // VERIFIED PROOFS & AVG SETTLEMENT */}
-        <div className="px-5 py-4">
-          <div className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
-            04 // VERIFIED PROOFS &amp; SETTLEMENT
+        <div className="p-3 sm:px-5 sm:py-4">
+          <div className="text-[10px] sm:text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
+            04 // VERIFIED PROOFS
           </div>
-          <div className="mt-2 font-mono text-2xl font-semibold tabular-nums text-[#EDEDEC]">
+          <div className="mt-1.5 sm:mt-2 font-mono text-lg sm:text-2xl font-semibold tabular-nums text-[#EDEDEC]">
             {isLiveStagedMainnet ? (
               <span>
-                0 <span className="text-sm font-normal text-[#63635E]">(STAGED)</span>
+                0 <span className="text-xs sm:text-sm font-normal text-[#63635E]">(STAGED)</span>
               </span>
             ) : (
               kpis.proofsVerified.toLocaleString()
             )}
           </div>
-          <div className="mt-1.5 flex items-center justify-between font-mono text-[11px] tabular-nums text-[#9A9A94]">
-            <span>
+          <div className="mt-1 sm:mt-1.5 flex items-center justify-between font-mono text-[10px] sm:text-[11px] tabular-nums text-[#9A9A94]">
+            <span className="truncate">
               {kpis.avgSettlementSecs > 0
-                ? `AVG SETTLEMENT: ${kpis.avgSettlementSecs.toFixed(1)}s`
+                ? `AVG: ${kpis.avgSettlementSecs.toFixed(1)}s`
                 : !liveStreamEnabled && deployment.router
-                  ? "SOURCE: SEPOLIA 743111 ON-CHAIN"
-                  : "AWAITING 43111 ROUTER"}
+                  ? "SEPOLIA 743111"
+                  : "STAGED"}
             </span>
             <span
               className={cn(
+                "shrink-0",
                 isLiveStagedMainnet ? "text-[#63635E]" : "text-[#10B981]"
               )}
             >
@@ -355,15 +357,48 @@ export default function MarketplacePage() {
         </div>
       </section>
 
+      {/* Mobile Master-Detail Panel Switcher (< lg) */}
+      <div className="grid grid-cols-2 divide-x divide-[#232320] border-b border-[#232320] bg-[#111110] font-mono text-[11px] tabular-nums lg:hidden">
+        <button
+          type="button"
+          onClick={() => setMobilePane("table")}
+          className={cn(
+            "relative h-9 px-2 uppercase tracking-wider transition-colors",
+            mobilePane === "table"
+              ? "bg-[#181816] font-semibold text-[#EDEDEC] after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:bg-[#FF5500]"
+              : "text-[#63635E] hover:text-[#EDEDEC]"
+          )}
+        >
+          [01 // AUCTIONS ({filteredJobs.length})]
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobilePane("inspector")}
+          className={cn(
+            "relative h-9 px-2 uppercase tracking-wider transition-colors",
+            mobilePane === "inspector"
+              ? "bg-[#181816] font-semibold text-[#EDEDEC] after:absolute after:inset-x-0 after:bottom-0 after:h-[2px] after:bg-[#FF5500]"
+              : "text-[#63635E] hover:text-[#EDEDEC]"
+          )}
+        >
+          [02 // INSPECTOR {inspectedJob ? `#${inspectedJob.shortNumericId}` : "STANDBY"}]
+        </button>
+      </div>
+
       {/* 2. Main Split Workbench (8 Cols Auction Table / 4 Cols Docked Job Telemetry Inspector) */}
       <section className="grid min-h-[calc(100vh-12.5rem)] grid-cols-1 divide-y divide-[#232320] lg:grid-cols-12 lg:divide-x lg:divide-y-0">
         {/* Left 8 Columns: High-Density Auction Table */}
-        <div className="flex flex-col bg-[#0B0B0A] lg:col-span-8">
-          {/* Quiet Filter Bar (Zero borders on inactive filter states) */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#232320] bg-[#0B0B0A] px-4 py-2.5">
-            <div className="flex flex-wrap items-center gap-1 font-mono text-[11px]">
+        <div
+          className={cn(
+            "flex flex-col bg-[#0B0B0A] lg:col-span-8",
+            mobilePane === "inspector" && "hidden lg:flex"
+          )}
+        >
+          {/* Quiet Filter Bar (Swipeable single line on mobile, full-width search below) */}
+          <div className="flex flex-col gap-2 border-b border-[#232320] bg-[#0B0B0A] px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-4 sm:py-2.5">
+            <div className="flex w-full items-center gap-1 overflow-x-auto whitespace-nowrap font-mono text-[11px] sm:w-auto">
               {/* zkVM Monospace Filter Pills */}
-              <div className="flex items-center gap-0.5">
+              <div className="flex shrink-0 items-center gap-0.5">
                 {(
                   [
                     { id: "ALL", label: "ALL" },
@@ -379,7 +414,7 @@ export default function MarketplacePage() {
                       type="button"
                       onClick={() => setZkvmFilter(vm.id)}
                       className={cn(
-                        "rounded-[2px] px-2 py-1 uppercase tracking-wider transition-colors",
+                        "shrink-0 rounded-[2px] px-2 py-1 uppercase tracking-wider transition-colors",
                         active
                           ? "bg-[#181816] font-semibold text-[#EDEDEC] shadow-[inset_0_-1px_0_0_#FF5500]"
                           : "text-[#63635E] hover:text-[#EDEDEC]"
@@ -391,10 +426,10 @@ export default function MarketplacePage() {
                 })}
               </div>
 
-              <span className="mx-1.5 h-3.5 w-px bg-[#232320]" aria-hidden="true" />
+              <span className="mx-1 h-3.5 w-px shrink-0 bg-[#232320] sm:mx-1.5" aria-hidden="true" />
 
               {/* Status Monospace Filter Pills */}
-              <div className="flex items-center gap-0.5">
+              <div className="flex shrink-0 items-center gap-0.5">
                 {(
                   [
                     { id: "ALL", label: "ALL STATUS" },
@@ -410,7 +445,7 @@ export default function MarketplacePage() {
                       type="button"
                       onClick={() => setStatusFilter(st.id)}
                       className={cn(
-                        "rounded-[2px] px-2 py-1 uppercase tracking-wider transition-colors",
+                        "shrink-0 rounded-[2px] px-2 py-1 uppercase tracking-wider transition-colors",
                         active
                           ? "bg-[#181816] font-semibold text-[#EDEDEC] shadow-[inset_0_-1px_0_0_#FF5500]"
                           : "text-[#63635E] hover:text-[#EDEDEC]"
@@ -423,16 +458,17 @@ export default function MarketplacePage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex w-full items-center gap-2 sm:w-auto">
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="FILTER JOB / CALLER / ELF..."
-                className="h-7 w-48 sm:w-56 text-[11px]"
+                className="h-7 flex-1 sm:w-56 sm:flex-none text-[11px]"
               />
               <Button
                 variant="secondary"
                 size="sm"
+                className="shrink-0"
                 onClick={() => refetch()}
                 disabled={isFetching}
               >
@@ -531,11 +567,11 @@ export default function MarketplacePage() {
               <table className="w-full border-collapse font-mono text-xs tabular-nums">
                 <thead>
                   <tr className="border-b border-[#232320] bg-[#111110] text-left text-[10px] uppercase tracking-[0.12em] text-[#63635E]">
-                    <th className="px-3.5 py-2.5 font-medium">JOB ID</th>
-                    <th className="px-3.5 py-2.5 font-medium">REQUESTER</th>
-                    <th className="px-3.5 py-2.5 font-medium">ZKVM</th>
-                    <th className="px-3.5 py-2.5 font-medium">ELF SOURCE</th>
-                    <th className="px-3.5 py-2.5 font-medium">
+                    <th className="px-2.5 sm:px-3.5 py-2.5 font-medium">JOB ID</th>
+                    <th className="hidden md:table-cell px-3.5 py-2.5 font-medium">REQUESTER</th>
+                    <th className="px-2.5 sm:px-3.5 py-2.5 font-medium">ZKVM</th>
+                    <th className="hidden md:table-cell px-3.5 py-2.5 font-medium">ELF SOURCE</th>
+                    <th className="px-2.5 sm:px-3.5 py-2.5 font-medium">
                       <span className="inline-flex items-center">
                         <span>ESCALATING OFFER</span>
                         <InfoTip
@@ -544,8 +580,8 @@ export default function MarketplacePage() {
                         />
                       </span>
                     </th>
-                    <th className="px-3.5 py-2.5 font-medium">STATUS</th>
-                    <th className="px-3.5 py-2.5 font-medium">PROVER</th>
+                    <th className="px-2.5 sm:px-3.5 py-2.5 font-medium">STATUS</th>
+                    <th className="hidden md:table-cell px-3.5 py-2.5 font-medium">PROVER</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#232320]">
@@ -560,7 +596,10 @@ export default function MarketplacePage() {
                     return (
                       <tr
                         key={job.jobId}
-                        onClick={() => setSelectedJobId(job.jobId)}
+                        onClick={() => {
+                          setSelectedJobId(job.jobId);
+                          setMobilePane("inspector");
+                        }}
                         className={cn(
                           "cursor-pointer transition-colors hover:bg-[#181816]",
                           isSelected
@@ -569,7 +608,7 @@ export default function MarketplacePage() {
                         )}
                       >
                         {/* JOB ID */}
-                        <td className="px-3.5 py-3 align-top">
+                        <td className="px-2.5 sm:px-3.5 py-3 align-top">
                           <div className="flex items-center gap-1.5">
                             <span className="font-semibold text-[#EDEDEC]">
                               #{job.shortNumericId}
@@ -587,13 +626,27 @@ export default function MarketplacePage() {
                               </span>
                             )}
                           </div>
-                          <div className="mt-0.5 text-[11px] text-[#63635E]">
+                          <div className="mt-0.5 text-[10px] sm:text-[11px] text-[#63635E]">
                             {shortenHex(job.jobId, 4, 4)}
+                          </div>
+                          {/* Compact mobile sub-line for Requester & ELF Source */}
+                          <div className="mt-0.5 flex items-center gap-1 text-[9px] uppercase text-[#9A9A94] md:hidden">
+                            <span>
+                              {job.requesterType === "Smart Contract" ? "[CONTRACT]" : "[EOA]"}
+                            </span>
+                            <span className="text-[#63635E]">•</span>
+                            <span className="text-[#63635E]">
+                              {job.elfSourceType === "Arweave"
+                                ? "AR"
+                                : job.elfSourceType === "IPFS"
+                                  ? "IPFS"
+                                  : "GH"}
+                            </span>
                           </div>
                         </td>
 
                         {/* REQUESTER ([CONTRACT] vs [EOA] micro-tag) */}
-                        <td className="px-3.5 py-3 align-top">
+                        <td className="hidden md:table-cell px-3.5 py-3 align-top">
                           <div className="flex items-center gap-1.5">
                             <span
                               className={cn(
@@ -614,7 +667,7 @@ export default function MarketplacePage() {
                         </td>
 
                         {/* ZKVM (borderless technical text) */}
-                        <td className="px-3.5 py-3 align-top">
+                        <td className="px-2.5 sm:px-3.5 py-3 align-top">
                           <div className="text-[11px] font-semibold uppercase text-[#EDEDEC]">
                             {job.zkvm}
                           </div>
@@ -626,7 +679,7 @@ export default function MarketplacePage() {
                         </td>
 
                         {/* ELF SOURCE */}
-                        <td className="px-3.5 py-3 align-top">
+                        <td className="hidden md:table-cell px-3.5 py-3 align-top">
                           <div className="text-[10px] uppercase text-[#9A9A94]">
                             {job.elfSourceType === "Arweave"
                               ? "ARWEAVE"
@@ -640,8 +693,8 @@ export default function MarketplacePage() {
                         </td>
 
                         {/* ESCALATING OFFER (numeric + 10-segment ASCII progress indicator) */}
-                        <td className="px-3.5 py-3 align-top">
-                          <div className="flex items-baseline justify-between gap-2">
+                        <td className="px-2.5 sm:px-3.5 py-3 align-top">
+                          <div className="flex items-baseline justify-between gap-1.5 sm:gap-2">
                             <span className="font-semibold text-[#EDEDEC]">
                               {job.currentOfferHemi.toFixed(2)} {tokenSymbolLabel}
                             </span>
@@ -649,7 +702,7 @@ export default function MarketplacePage() {
                               /{job.maxOfferHemi.toFixed(1)}
                             </span>
                           </div>
-                          <div className="mt-0.5 text-[11px] tracking-[0.06em]">
+                          <div className="mt-0.5 text-[10px] sm:text-[11px] tracking-[0.06em]">
                             <span className="text-[#FF5500]">
                               {asciiBar.slice(0, Math.round(ratio * 10))}
                             </span>
@@ -660,12 +713,12 @@ export default function MarketplacePage() {
                         </td>
 
                         {/* STATUS (borderless dot indicator) */}
-                        <td className="px-3.5 py-3 align-top">
+                        <td className="px-2.5 sm:px-3.5 py-3 align-top">
                           <StatusTag status={job.status} />
                         </td>
 
                         {/* PROVER */}
-                        <td className="px-3.5 py-3 align-top text-[11px]">
+                        <td className="hidden md:table-cell px-3.5 py-3 align-top text-[11px]">
                           {job.proverAddress ? (
                             <span className="text-[#9A9A94]">
                               {shortenHex(job.proverAddress, 4, 4)}
@@ -684,13 +737,27 @@ export default function MarketplacePage() {
         </div>
 
         {/* Right 4 Columns: Docked Job Telemetry Inspector (Honest Standby in Empty LIVE Mode) */}
-        <aside className="flex flex-col divide-y divide-[#232320] bg-[#111110] lg:col-span-4">
+        <aside
+          className={cn(
+            "flex flex-col divide-y divide-[#232320] bg-[#111110] lg:col-span-4",
+            mobilePane === "table" && "hidden lg:flex"
+          )}
+        >
           {!inspectedJob ? (
             <div className="flex flex-1 flex-col justify-between p-4 font-mono text-xs tabular-nums">
               <div className="space-y-4">
                 <div>
-                  <div className="text-[11px] uppercase tracking-[0.12em] text-[#63635E]">
-                    INSPECTOR // LIVE TELEMETRY STANDBY
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] uppercase tracking-[0.12em] text-[#63635E]">
+                      INSPECTOR // LIVE TELEMETRY STANDBY
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setMobilePane("table")}
+                      className="rounded-[2px] border border-[#232320] bg-[#0B0B0A] px-2 py-0.5 text-[10px] uppercase tracking-wider text-[#9A9A94] hover:text-[#EDEDEC] lg:hidden"
+                    >
+                      [&lt;- TABLE]
+                    </button>
                   </div>
                   <div className="mt-2 text-sm font-semibold text-[#EDEDEC]">
                     {isMainnetStaged
@@ -786,7 +853,16 @@ export default function MarketplacePage() {
                   <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
                     INSPECTOR // JOB #{inspectedJob.shortNumericId}
                   </span>
-                  <StatusTag status={inspectedJob.status} />
+                  <div className="flex items-center gap-2">
+                    <StatusTag status={inspectedJob.status} />
+                    <button
+                      type="button"
+                      onClick={() => setMobilePane("table")}
+                      className="rounded-[2px] border border-[#232320] bg-[#0B0B0A] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-[#9A9A94] hover:text-[#EDEDEC] lg:hidden"
+                    >
+                      [&lt;- TABLE]
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-2 font-mono text-sm font-semibold text-[#EDEDEC]">
                   {inspectedJob.programName}
