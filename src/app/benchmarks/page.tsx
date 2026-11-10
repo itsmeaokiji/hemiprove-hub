@@ -551,7 +551,7 @@ export default function BenchmarksPage() {
                     <span>UNIFIED SCORE (zkOP/s)</span>
                     <InfoTip
                       label="Explain zkOP/s"
-                      text="Normalized GPU proving speed across workloads where 1 zkOP equals 1 Succinct SP1 RISC-V cycle on the 50M-cycle zkop-mix benchmark."
+                      text="Miner-scored GPU proving speed (Protocol 12 measure_zkop_mix): 1 zkOP equals 1 SP1 RISC-V cycle on the 50,007,139-cycle zkop-mix guest (3,202 iterations, median of up to 3 runs after a 200-iter warm-up)."
                     />
                   </span>
                 </th>
@@ -748,6 +748,23 @@ export default function BenchmarksPage() {
                       {selectedGpu.tdpWatts}W • ${selectedGpu.msrpUsd}
                     </span>
                   </div>
+                  {(selectedGpu.pcieLink || selectedGpu.telemetrySource) && (
+                    <div className="flex items-center justify-between px-2.5 py-1.5">
+                      <span className="text-[#63635E]">SLOT LINK / TELEMETRY</span>
+                      <span className="text-[#EDEDEC]">
+                        {[selectedGpu.pcieLink, selectedGpu.telemetrySource]
+                          .filter(Boolean)
+                          .join(" • ")}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between px-2.5 py-1.5">
+                    <span className="text-[#63635E]">MERKLE (15%) / ZKOP-MIX</span>
+                    <span className="text-[#9A9A94]">
+                      {selectedGpu.workloads["memory-merkle"].toFixed(2)}s •{" "}
+                      {selectedGpu.workloads["zkop-mix"].toFixed(2)}s
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -901,7 +918,7 @@ export default function BenchmarksPage() {
                       <span>RIG THROUGHPUT ({roiStats.safeCards}X)</span>
                       <InfoTip
                         label="Explain Rig zkOP/s"
-                        text="Normalized GPU proving speed across workloads where 1 zkOP equals 1 Succinct SP1 RISC-V cycle on the 50M-cycle zkop-mix benchmark."
+                        text="Miner-scored GPU proving speed (Protocol 12 measure_zkop_mix): 1 zkOP equals 1 SP1 RISC-V cycle on the 50,007,139-cycle zkop-mix guest (3,202 iterations, median of up to 3 runs after a 200-iter warm-up)."
                       />
                     </span>
                     <span className="font-semibold text-[#EDEDEC]">

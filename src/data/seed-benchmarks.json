@@ -16,16 +16,19 @@
     "zkops": 2980000,
     "starkRateCyclesPerSec": 3085000,
     "groth16WrapSecs": 2.02,
+    "pciBusId": "0000:01:00.0",
+    "pcieLink": "PCIe Gen4 x16",
+    "telemetrySource": "NVML + Linux sysfs",
     "workloads": {
-      "zkop-mix": 16.8,
+      "zkop-mix": 16.78,
       "chacha-mix": 16.2,
       "sha256-chain": 44.1,
       "ecdsa-verify": 4.92,
       "bigint-mul": 4.55,
-      "fibonacci": 0.42
+      "memory-merkle": 6.12
     },
     "verified": true,
-    "notes": "268M SP1 element threshold (17.8 GiB peak VRAM); reference flagship CUDA worker"
+    "notes": "268M SP1 element threshold (17.8 GiB peak VRAM); Groth16 wrap timed on chacha-mix by difference"
   },
   {
     "id": "rtx-4090-cuda-risc0",
@@ -44,16 +47,19 @@
     "zkops": 2540000,
     "starkRateCyclesPerSec": 2017000,
     "groth16WrapSecs": 2.02,
+    "pciBusId": "0000:01:00.0",
+    "pcieLink": "PCIe Gen4 x16",
+    "telemetrySource": "NVML + Linux sysfs",
     "workloads": {
-      "zkop-mix": 19.7,
+      "zkop-mix": 19.69,
       "chacha-mix": 16.2,
       "sha256-chain": 46.8,
       "ecdsa-verify": 5.35,
       "bigint-mul": 5.1,
-      "fibonacci": 0.48
+      "memory-merkle": 6.85
     },
     "verified": true,
-    "notes": "Keeps 3.45 GB Groth16 SRS resident across proofs (2.02s warm wrap; 18.5 GB multi-seg peak)"
+    "notes": "Keeps 3.45 GB Groth16 SRS resident across proofs (2.02s median warm wrap across 5 suite programs)"
   },
   {
     "id": "rx-9070-xt-rocm-sp1",
@@ -72,13 +78,16 @@
     "zkops": 2760000,
     "starkRateCyclesPerSec": 2750000,
     "groth16WrapSecs": 3.85,
+    "pciBusId": "0000:03:00.0",
+    "pcieLink": "PCIe Gen5 x16",
+    "telemetrySource": "Linux sysfs (amdgpu / hwmon)",
     "workloads": {
-      "zkop-mix": 18.1,
+      "zkop-mix": 18.12,
       "chacha-mix": 12.35,
       "sha256-chain": 59.0,
       "ecdsa-verify": 6.78,
       "bigint-mul": 6.28,
-      "fibonacci": 0.56
+      "memory-merkle": 7.42
     },
     "verified": true,
     "notes": "sp1-gpu-server-hip compiled against ROCm 10.1; standout ARX throughput (chacha-mix 12.35s)"
@@ -88,11 +97,11 @@
     "model": "AMD Radeon RX 9070 XT",
     "shortModel": "RX 9070 XT",
     "vendor": "AMD",
-    "computeStack": "HIP / Adrenalin",
+    "computeStack": "HIP / Adrenalin ADLX",
     "arch": "gfx1201 (RDNA 4)",
     "vramGb": 16,
     "os": "Windows",
-    "osDetail": "Windows 11 24H2 / Adrenalin HIP 7.1",
+    "osDetail": "Windows 11 24H2 / Adrenalin HIP 7.1 + amdadlx64.dll",
     "zkvm": "risc0",
     "optimalPo2": 20,
     "tdpWatts": 290,
@@ -100,16 +109,19 @@
     "zkops": 2120000,
     "starkRateCyclesPerSec": 1840000,
     "groth16WrapSecs": 4.4,
+    "pciBusId": "0000:03:00.0",
+    "pcieLink": "PCIe Gen5 x16",
+    "telemetrySource": "ADLX (amdadlx64.dll)",
     "workloads": {
-      "zkop-mix": 23.6,
+      "zkop-mix": 23.59,
       "chacha-mix": 17.0,
       "sha256-chain": 59.0,
       "ecdsa-verify": 6.78,
       "bigint-mul": 6.28,
-      "fibonacci": 0.64
+      "memory-merkle": 7.95
     },
     "verified": true,
-    "notes": "RDNA 4 Windows 11 Adrenalin + Linux dual-validated; 213M sha256-chain in 59.0s, R0 chacha-mix 17.0s"
+    "notes": "Windows 11 Adrenalin + ADLX (amdadlx64.dll) slot PCIe/temp/power telemetry; 5-program Protocol 12 suite"
   },
   {
     "id": "rtx-5080-cuda-sp1",
@@ -128,13 +140,16 @@
     "zkops": 2610000,
     "starkRateCyclesPerSec": 2640000,
     "groth16WrapSecs": 2.1,
+    "pciBusId": "0000:02:00.0",
+    "pcieLink": "PCIe Gen5 x16",
+    "telemetrySource": "NVML + Linux sysfs",
     "workloads": {
-      "zkop-mix": 19.2,
+      "zkop-mix": 19.16,
       "chacha-mix": 17.4,
       "sha256-chain": 48.6,
       "ecdsa-verify": 5.45,
       "bigint-mul": 5.18,
-      "fibonacci": 0.46
+      "memory-merkle": 6.74
     },
     "verified": true,
     "notes": "16,303 MiB VRAM; auto-tuned 134M SP1 threshold (15,092 MiB peak); 2.10s Groth16 wrap"
@@ -156,13 +171,16 @@
     "zkops": 2290000,
     "starkRateCyclesPerSec": 1890000,
     "groth16WrapSecs": 2.1,
+    "pciBusId": "0000:02:00.0",
+    "pcieLink": "PCIe Gen5 x16",
+    "telemetrySource": "NVML + Linux sysfs",
     "workloads": {
-      "zkop-mix": 21.8,
+      "zkop-mix": 21.84,
       "chacha-mix": 18.1,
       "sha256-chain": 51.2,
       "ecdsa-verify": 5.82,
       "bigint-mul": 5.64,
-      "fibonacci": 0.51
+      "memory-merkle": 7.35
     },
     "verified": true,
     "notes": "Releases Groth16 SRS cache between proofs (<20 GiB rule); peaks at 12,436 MiB at po2=20"
@@ -184,13 +202,16 @@
     "zkops": 2040000,
     "starkRateCyclesPerSec": 1710000,
     "groth16WrapSecs": 4.65,
+    "pciBusId": "0000:06:00.0",
+    "pcieLink": "PCIe Gen4 x16",
+    "telemetrySource": "Linux sysfs (amdgpu / hwmon)",
     "workloads": {
-      "zkop-mix": 24.5,
+      "zkop-mix": 24.51,
       "chacha-mix": 18.9,
       "sha256-chain": 62.4,
       "ecdsa-verify": 7.15,
       "bigint-mul": 6.85,
-      "fibonacci": 0.68
+      "memory-merkle": 8.62
     },
     "verified": true,
     "notes": "24GB VRAM fits full Groth16 SRS + multi-segment po2=20; 40/40 valid with RDNA3 LDS fence"
@@ -212,13 +233,16 @@
     "zkops": 1590000,
     "starkRateCyclesPerSec": 1580000,
     "groth16WrapSecs": 3.4,
+    "pciBusId": "0000:04:00.0",
+    "pcieLink": "PCIe Gen5 x8",
+    "telemetrySource": "NVML + Linux sysfs",
     "workloads": {
-      "zkop-mix": 31.4,
+      "zkop-mix": 31.45,
       "chacha-mix": 26.8,
       "sha256-chain": 76.5,
       "ecdsa-verify": 8.9,
       "bigint-mul": 8.4,
-      "fibonacci": 0.78
+      "memory-merkle": 10.95
     },
     "verified": true,
     "notes": "Official zk-miner CI GPU runner card; 16GB VRAM clears both po2=20 R0 and 134M SP1 floors"
@@ -228,11 +252,11 @@
     "model": "AMD Radeon RX 9060 XT",
     "shortModel": "RX 9060 XT",
     "vendor": "AMD",
-    "computeStack": "ROCm 10.1 / HIP",
+    "computeStack": "HIP / Adrenalin ADLX",
     "arch": "gfx1200 (RDNA 4)",
     "vramGb": 16,
-    "os": "Linux",
-    "osDetail": "Ubuntu 24.04 LTS / amdgpu",
+    "os": "Windows",
+    "osDetail": "Windows 11 24H2 / ADLX (amdadlx64.dll) + HIP",
     "zkvm": "sp1",
     "optimalPo2": 20,
     "tdpWatts": 170,
@@ -240,27 +264,61 @@
     "zkops": 1520000,
     "starkRateCyclesPerSec": 1510000,
     "groth16WrapSecs": 4.9,
+    "pciBusId": "0000:03:00.0",
+    "pcieLink": "PCIe Gen5 x8",
+    "telemetrySource": "ADLX (amdadlx64.dll)",
     "workloads": {
       "zkop-mix": 32.9,
       "chacha-mix": 22.4,
       "sha256-chain": 88.2,
       "ecdsa-verify": 9.8,
       "bigint-mul": 9.1,
-      "fibonacci": 0.85
+      "memory-merkle": 11.4
     },
     "verified": true,
-    "notes": "Top zkOP/s-per-dollar consumer card; 16GB RDNA 4 with bundled ROCm 10.1 HIP runtime"
+    "notes": "Validated in commit 101edae & a12ce82 (3/3 zkop-mix scoring runs, negotiated PCIe 5.0 x8 via ADLX)"
+  },
+  {
+    "id": "arc-pro-b70-win11-sp1",
+    "model": "Intel Arc Pro B70",
+    "shortModel": "Arc Pro B70",
+    "vendor": "Intel",
+    "computeStack": "oneAPI SYCL / IGCL",
+    "arch": "bmg_g31 (Battlemage Pro)",
+    "vramGb": 32,
+    "os": "Windows",
+    "osDetail": "Windows 11 24H2 / IGCL (ControlLib.dll) + Level Zero",
+    "zkvm": "sp1",
+    "optimalPo2": 20,
+    "tdpWatts": 215,
+    "msrpUsd": 899,
+    "zkops": 1410000,
+    "starkRateCyclesPerSec": 1380000,
+    "groth16WrapSecs": 19.8,
+    "pciBusId": "0000:05:00.0",
+    "pcieLink": "PCIe Gen5 x8",
+    "telemetrySource": "IGCL (ControlLib.dll)",
+    "workloads": {
+      "zkop-mix": 35.47,
+      "chacha-mix": 28.6,
+      "sha256-chain": 82.4,
+      "ecdsa-verify": 9.3,
+      "bigint-mul": 8.9,
+      "memory-merkle": 11.2
+    },
+    "verified": true,
+    "notes": "Battlemage G31 (0xe223) validated in commit 101edae & a12ce82 (SP1 + RISC0, PCIe 5.0 x8 via IGCL ControlLib.dll)"
   },
   {
     "id": "rtx-4070-win-cuda-risc0",
     "model": "NVIDIA GeForce RTX 4070",
     "shortModel": "RTX 4070",
     "vendor": "NVIDIA",
-    "computeStack": "CUDA 12.8",
+    "computeStack": "CUDA 12.8 / NVML",
     "arch": "sm_89 (Ada Lovelace)",
     "vramGb": 12,
     "os": "Windows",
-    "osDetail": "Windows 11 Pro / Native MSVC + CUDA 12.8",
+    "osDetail": "Windows 11 Pro / Native MSVC + NVML PCIe Link",
     "zkvm": "risc0",
     "optimalPo2": 19,
     "tdpWatts": 190,
@@ -268,13 +326,16 @@
     "zkops": 1340000,
     "starkRateCyclesPerSec": 1180000,
     "groth16WrapSecs": 3.65,
+    "pciBusId": "0000:01:00.0",
+    "pcieLink": "PCIe Gen4 x16",
+    "telemetrySource": "NVML (nvml.dll)",
     "workloads": {
-      "zkop-mix": 37.3,
+      "zkop-mix": 37.32,
       "chacha-mix": 29.4,
       "sha256-chain": 84.0,
       "ecdsa-verify": 9.6,
       "bigint-mul": 9.2,
-      "fibonacci": 0.89
+      "memory-merkle": 12.1
     },
     "verified": true,
     "notes": "12GB VRAM (<14 GiB default gate) calibrated via `zkminer benchmark --calibrate` at po2=19"
@@ -296,13 +357,16 @@
     "zkops": 785000,
     "starkRateCyclesPerSec": 615000,
     "groth16WrapSecs": 38.4,
+    "pciBusId": "0000:03:00.0",
+    "pcieLink": "PCIe Gen4 x8",
+    "telemetrySource": "Linux sysfs (xe / i915)",
     "workloads": {
       "zkop-mix": 63.7,
       "chacha-mix": 55.2,
       "sha256-chain": 148.0,
       "ecdsa-verify": 16.4,
       "bigint-mul": 15.8,
-      "fibonacci": 1.45
+      "memory-merkle": 20.4
     },
     "verified": true,
     "notes": "AOT ocloc `intel_gpu_bmg_g21` kernels; shipped Level Zero + IGC 2.28.4 runtime"
@@ -324,13 +388,16 @@
     "zkops": 520000,
     "starkRateCyclesPerSec": 389000,
     "groth16WrapSecs": 59.0,
+    "pciBusId": "0000:03:00.0",
+    "pcieLink": "PCIe Gen4 x16",
+    "telemetrySource": "Linux sysfs (xe / i915)",
     "workloads": {
-      "zkop-mix": 96.1,
+      "zkop-mix": 96.17,
       "chacha-mix": 87.4,
       "sha256-chain": 218.5,
       "ecdsa-verify": 24.2,
       "bigint-mul": 23.6,
-      "fibonacci": 2.15
+      "memory-merkle": 31.0
     },
     "verified": true,
     "notes": "16GB VRAM runs full po2=20 segments (~389K cycles/s STARK rate, 59.0s Groth16 wrap)"

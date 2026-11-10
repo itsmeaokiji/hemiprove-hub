@@ -21,13 +21,13 @@ Built directly against the ground-truth ABIs, deployment pins, and Protocol 12 s
 - **Docked Job Telemetry Inspector:** Inspects Reverse Dutch Auction price escalation (`Linear` / `Quadratic`), requester type (`EOA` vs `Smart Contract` via `eth_getCode`), ELF storage origin (`Arweave`, `IPFS`, `GitHub Release`), pre-claim guard status, and links 1:1 into `/simulate` (`AUDIT IN SIMULATE STUDIO ->`).
 
 ### `[02]` Multi-Vendor GPU `zkOP/s` Leaderboard & Miner ROI Studio (`/benchmarks`)
-- **Cross-Vendor Hardware Datasheet:** Pre-seeded with 11 hardware baselines (`src/data/seed-benchmarks.json`) calibrated against `zk-miner` across:
-  - **NVIDIA (`CUDA 12.8 / 12.9`):** RTX 4090 (`sm_89`), RTX 5080 (`sm_120`), RTX 5060 Ti (`sm_120`), RTX 4070 (`sm_89`, `po2=19`).
-  - **AMD Radeon (`ROCm 10.1 / Adrenalin HIP`):** RX 9070 XT (`gfx1201` on Linux & Windows 11), RX 7900 XTX (`gfx1100`), RX 9060 XT (`gfx1200`).
-  - **Intel Arc (`oneAPI SYCL 2026.0`):** Arc B580 (`bmg_g21`, `po2=19`), Arc A770 16GB (`acm_g10`).
-- **Normalized `zkOP/s` Scoring:** Implements the exact `zkminer benchmark` rule (`1 zkOP = 1 SP1 cycle` on the 50M-cycle `zkop-mix` baseline) alongside per-workload STARK timings (`zkop-mix`, `chacha-mix`, `sha256-chain`, `ecdsa-verify`, `bigint-mul`, `fibonacci`) and Groth16 wrap latencies.
-- **Miner ROI & Power Calculator:** Models multi-card rig `MzkOP/s`, network share, `85%` proving duty-cycle power draw + `65W` host overhead, daily/monthly net USD profit, and hardware capex break-even days.
-- **Zero-Friction Community Submissions:** Validates and ingests both raw `zkminer benchmark` CLI stdout tables and `zkminer benchmark --json` (`BenchmarkSuite`) payloads.
+- **Cross-Vendor Hardware Datasheet:** Pre-seeded with 12 hardware baselines (`src/data/seed-benchmarks.json`) calibrated against `zk-miner` (`max/windows-gpu` commit `101edae` & `a12ce82`) across:
+  - **NVIDIA (`CUDA 12.8 / 12.9` + `NVML`):** RTX 4090 (`sm_89`), RTX 5080 (`sm_120`), RTX 5060 Ti (`sm_120`), RTX 4070 (`sm_89`, `po2=19`, Windows NVML PCIe link).
+  - **AMD Radeon (`ROCm 10.1 / Adrenalin HIP + ADLX amdadlx64.dll`):** RX 9070 XT (`gfx1201` on Linux & Windows 11), RX 7900 XTX (`gfx1100`), RX 9060 XT (`gfx1200`, `PCIe Gen5 x8`).
+  - **Intel Arc (`oneAPI SYCL 2026.0 + IGCL ControlLib.dll`):** Arc Pro B70 (`bmg_g31` 32GB, `PCIe Gen5 x8`), Arc B580 (`bmg_g21`, `po2=19`), Arc A770 16GB (`acm_g10`).
+- **Protocol 12 Self-Scored `zkOP/s` & 5-Program Suite:** Implements `zkminer`'s miner-driven `measure_zkop_mix` scoring (`1 zkOP = 1 SP1 cycle` on the `50,007,139`-cycle `zkop-mix` guest at `3,202` iterations; 1 warm-up at 200 iterations + median of up to 3 runs inside a 60s budget) alongside the 5 canonical suite programs (`sha256-chain` 20%, `ecdsa-verify` 25%, `bigint-mul` 20%, `memory-merkle` 15%, `chacha-mix` 20% — with `fibonacci` dropped so per-proof overhead and SP1 cycle skew never distort cycle-weighted `stark_rate`), Groth16 wrap latencies, and Windows native driver telemetry (`IGCL` / `ADLX` / `NVML` negotiated slot PCIe link).
+- **Miner ROI & Power Calculator:** Live CoinGecko `HEMI/USD` spot price integration (`60s` server cache + custom "what-if" override), modeling multi-card rig `MzkOP/s`, network share, `85%` proving duty-cycle power draw + `65W` host overhead, daily/monthly net USD profit, and hardware capex break-even days.
+- **Zero-Friction Community Submissions:** Validates and ingests both raw `zkminer benchmark` CLI stdout tables (including `Proving stages` sub-tables) and `zkminer benchmark --json` (`BenchmarkSuite` + `program_stages`) payloads.
 
 ### `[03]` `zkminer simulate` Job Sizing & `risc0-public-v3` Studio (`/simulate`)
 - **Full Cycle Accounting Breakdown:** Separates raw RISC-V guest instructions (`guestCycles`), power-of-two segment padding (`paddingCycles`), and Keccak coprocessor charges (`keccakRequests * 1,048,576` cycles) into `report.cycles` (`TOTAL CHARGED CYCLES`).

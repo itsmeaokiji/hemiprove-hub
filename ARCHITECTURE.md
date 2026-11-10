@@ -85,7 +85,7 @@ hemiprove-hub/
     │   ├── providers.tsx             # Wagmi + React Query + HemiNetworkContext global provider
     │   └── ui/                       # Datasheet primitives (info-tip portal, button, input, switch, badge, card)
     ├── data/
-    │   └── seed-benchmarks.json      # 11 verified NVIDIA CUDA, AMD ROCm/HIP & Intel SYCL baselines
+    │   └── seed-benchmarks.json      # 12 verified NVIDIA CUDA, AMD ROCm/HIP & Intel SYCL baselines
     └── lib/
         ├── benchmark-parser.ts       # Dual `zkminer benchmark` CLI stdout & `--json` parser
         ├── code-generator.ts         # Solidity (`IHemiProveCallback`) & TypeScript (`viem`) codegen
@@ -154,18 +154,34 @@ $$
 
 ---
 
-### 4.2 `zkOP/s` Normalization & Benchmark Parsing (`src/lib/benchmark-parser.ts`)
-Per `crates/zkminer-cli/src/commands/benchmark.rs`, **1 `zkOP` is defined as 1 Succinct SP1 RISC-V cycle** on the 50,000,000-cycle `zkop-mix` reference guest (where an AMD Threadripper 3970X 32-core CPU baseline equals `100,000 zkOP/s`).
+### 4.2 Protocol 12 `zkOP/s` Self-Scoring, 5-Program Suite & Windows Driver Telemetry (`src/lib/benchmark-parser.ts`)
+Mirrored from `crates/zkminer-prover-protocol/src/suite.rs`, `types.rs`, and `crates/zkminer-prover/src/benchmark.rs` (`max/windows-gpu` commit `101edae` & `a12ce82`):
 
-When `zkop-mix` STARK proving wall-time $T_{\text{zkop-mix}}$ (in seconds) is measured:
+1. **Miner-Driven Self-Scored `zkOP/s` (`measure_zkop_mix`):**
+   - **1 `zkOP` is defined as 1 Succinct SP1 RISC-V cycle** on the `zkop-mix` guest at `ZKOP_MIX_ITERATIONS = 3,202`, which equals **`ZKOP_MIX_SP1_CYCLES = 50,007,139`** SP1 cycles.
+   - Under Protocol 12, the host miner drives `measure_zkop_mix` directly: 1 discarded warm-up proof (`200` iterations) followed by up to `3` scored proofs inside a `60.0s` budget, taking the **median** STARK proving duration $T_{\text{stark,median}}$:
 
 $$
-\text{zkOP/s} = \operatorname{round}\!\left(\frac{50{,}000{,}000}{T_{\text{zkop-mix}}}\right)
+\text{zkOP/s} = \operatorname{round}\!\left(\frac{50{,}007{,}139}{T_{\text{stark,median}}}\right)
 $$
 
-The benchmark parser supports two input formats seamlessly:
-1. **`zkminer benchmark --json` (`BenchmarkSuite` schema):** Reads top-level `zkops`, `gpu_power_watts`, `results[]` (`zkop-mix`, `ecdsa-verify`, `bigint-mul`, `chacha-mix`, `sha256-chain`, `fibonacci`), and `device_benchmarks[]` (`device_name`, `backend`, `po2`, `peak_memory_bytes`, `cycle_rate`, `groth16_secs`).
-2. **Raw `zkminer benchmark` CLI stdout:** Extracts `zkOP/s: <score>`, `GPU power: <W>`, per-workload `ms`/`s`/`m s` STARK durations, `M c/s` cycle rates, and `Device Benchmarks` table columns.
+2. **Canonical 5-Program Benchmark Suite (`BENCHMARK_PROGRAMS`):**
+   - `WorkerCommand::Benchmark { programs: benchmark_suite(backend) }` dispatches the 5 canonical programs (weights summing to `1.0`; `fibonacci` was dropped in `f54b3b9` so its fixed per-proof overhead on RISC Zero and 15.6M c/s skew on SP1 never distort cycle-weighted job time predictions):
+     - **45% Precompile:** `sha256-chain` (`20%` weight; input `10,000` RISC0 / `50,000` SP1), `ecdsa-verify` (`25%` weight; input `10`).
+     - **40% Pure Compute:** `bigint-mul` (`20%` weight; input `100`), `chacha-mix` (`20%` weight; input `5,000` RISC0 / `20,000` SP1).
+     - **15% Mixed:** `memory-merkle` (`15%` weight; input `512` RISC0 / `1,024` SP1).
+   - **STARK Rate & Groth16 Wrap Split (`program_stages`):**
+     - `DeviceBenchmark::stark_rate()` computes the **cycle-weighted STARK rate** across the 5 priced suite programs ($\sum \text{cycles} / \sum \text{stark\_secs}$, excluding `zkop-mix`), while `DeviceBenchmark::wrap_secs()` takes the **median** Groth16 wrap latency (timed across all 5 programs on RISC Zero, or once by difference on the final `chacha-mix` program on SP1 after GPU warm-up is paid).
+
+3. **Windows Native Vendor Driver Telemetry (`crates/zkminer-tui/src/windows_telemetry/`):**
+   - On Windows (where `/sys/class/drm` is absent), `zkminer` loads vendor driver libraries at runtime and joins physical cards by canonical 4-digit domain PCI bus ID (`0000:bus:dev.fn`):
+     - **Intel (`IGCL` / `ControlLib.dll`):** Negotiated slot PCIe link (`Gen1`–`Gen6` x width), GPU/VRAM temperatures & clocks, energy/activity counter-delta power & utilization, and throttle limits (`PL1`, `THERMAL`).
+     - **AMD (`ADLX` / `amdadlx64.dll`):** Negotiated slot PCIe link, edge/hotspot/memory temperatures, clocks, board power, utilization, fan RPM, voltage, and VRAM used/total.
+     - **NVIDIA (`NVML` / `nvml.dll`):** Negotiated slot PCIe link (`current_pcie_link_gen` / `current_pcie_link_width`), clocks, temperatures, fan, VRAM, and power draw.
+
+4. **Dual CLI & JSON Ingestion (`parseZkMinerBenchmark`):**
+   - **`zkminer benchmark --json` (`BenchmarkSuite` schema):** Reads top-level `zkops`, `gpu_power_watts`, `host_peaks`, `results[]` (`program_name`, `prover_backend`, `duration: { secs, nanos }`, `throughput`, `weight`), and `device_benchmarks[]` (`device_label`, `prover_backend`, `optimal_po2`, `memory_usage_bytes`, `pci_bus_id`, `host_peak_bytes`, and `program_stages[]`).
+   - **Raw `zkminer benchmark` CLI stdout:** Extracts `zkOP/s: <score>`, per-card `<device> / <backend>: <score>` lines, `Device Benchmarks` rows, and `Proving stages` sub-tables (including the `Groth16 wrap <w>s ... + N / <rate>` summary footer).
 
 Hardware energy efficiency (`SORT: ZKOP/WATT`) is computed as $\frac{\text{zkOP/s}}{\text{TDP}_{\text{watts}}}$.
 
