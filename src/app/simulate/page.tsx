@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useHemiNetwork } from "@/components/providers";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -13,6 +13,7 @@ import {
 import {
   runDeterministicSimulation,
   SIMULATE_PRESETS,
+  validateElfUri,
   type SimulateInputPayload,
   type SimulatePreset,
   type SimulateReportJson,
@@ -76,32 +77,53 @@ export default function SimulateStudioPage() {
     })
   );
   const [isRunning, setIsRunning] = useState(false);
+  const [justAnalyzed, setJustAnalyzed] = useState(false);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [artifactTab, setArtifactTab] = useState<ArtifactTab>("solidity");
   const [copiedArtifact, setCopiedArtifact] = useState(false);
   const [mobileSimPane, setMobileSimPane] = useState<"console" | "report">("console");
 
-  const executeSimulation = useCallback(async (params: SimulateInputPayload) => {
-    setIsRunning(true);
-    setErrorMsg(null);
-    try {
-      const res = await fetch("/api/simulate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(params),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        setErrorMsg(json.error ?? "SIMULATION EXECUTION FAILED");
-      } else {
-        setReport(json.report as SimulateReportJson);
-      }
-    } catch {
-      setReport(runDeterministicSimulation(params));
-    } finally {
-      setIsRunning(false);
-    }
+  useEffect(() => {
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
   }, []);
+
+  const flashAnalyzed = useCallback(() => {
+    setJustAnalyzed(true);
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => setJustAnalyzed(false), 900);
+  }, []);
+
+  const executeSimulation = useCallback(
+    async (params: SimulateInputPayload, withPulse = false) => {
+      setIsRunning(true);
+      setErrorMsg(null);
+      try {
+        const res = await fetch("/api/simulate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(params),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) {
+          setErrorMsg(json.error ?? "SIMULATION EXECUTION FAILED");
+          return false;
+        }
+        setReport(json.report as SimulateReportJson);
+        if (withPulse) flashAnalyzed();
+        return true;
+      } catch {
+        setReport(runDeterministicSimulation(params));
+        if (withPulse) flashAnalyzed();
+        return true;
+      } finally {
+        setIsRunning(false);
+      }
+    },
+    [flashAnalyzed]
+  );
 
   // Support full job context deep links from `/` (`/simulate?elf=...&zkvm=...&cycles=...&jobId=...&program=...`)
   useEffect(() => {
@@ -163,18 +185,29 @@ export default function SimulateStudioPage() {
     });
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    executeSimulation({
-      elfUrl,
-      targetZkvm,
-      stdin,
-      singleRun,
-      declaredCycles,
-      jobId: jobIdHint,
-      programId: programIdHint,
-    });
-    setMobileSimPane("report");
+    const check = validateElfUri(elfUrl);
+    if (!check.ok) {
+      setErrorMsg(check.error);
+      setMobileSimPane("console");
+      return;
+    }
+    const ok = await executeSimulation(
+      {
+        elfUrl: check.normalized,
+        targetZkvm,
+        stdin,
+        singleRun,
+        declaredCycles,
+        jobId: jobIdHint,
+        programId: programIdHint,
+      },
+      true
+    );
+    if (ok) {
+      setMobileSimPane("report");
+    }
   };
 
   const solidityCode = useMemo(
@@ -250,14 +283,19 @@ export default function SimulateStudioPage() {
               : "text-[#63635E] hover:bg-[#181816] hover:text-[#EDEDEC]"
           )}
         >
-          <span className="truncate">
-            [02 // REPORT ({formatCompactCycles(totalCyclesNum)} CYC)]
+          <span className="shrink-0">[02 // REPORT]</span>
+          <span className="inline-flex items-center gap-1.5 text-[10px] text-[#9A9A94] tabular-nums">
+            <span>{formatCompactCycles(totalCyclesNum)} CYC</span>
+            {report.sizeCheck === "differs" ? (
+              <span className="text-[#F43F5E]" aria-hidden="true">
+                ▲
+              </span>
+            ) : (
+              <span className="text-[#10B981]" aria-hidden="true">
+                ●
+              </span>
+            )}
           </span>
-          {report.sizeCheck === "differs" ? (
-            <span className="ml-1 text-[#F43F5E]">▲</span>
-          ) : (
-            <span className="ml-1 text-[#10B981]">●</span>
-          )}
         </button>
       </div>
 
@@ -294,14 +332,21 @@ export default function SimulateStudioPage() {
                     type="button"
                     onClick={() => handleLoadPreset(preset)}
                     className={cn(
-                      "flex w-full flex-col gap-1 px-4 py-3 text-left font-mono transition-all hover:bg-[#181816]",
+                      "group flex w-full flex-col gap-1 px-4 py-3 text-left font-mono transition-colors hover:bg-[#181816]",
                       isSelected
-                        ? "bg-[#181816] opacity-100 shadow-[inset_2px_0_0_0_#FF5500]"
-                        : "bg-[#111110] opacity-60 hover:opacity-100"
+                        ? "bg-[#181816] shadow-[inset_2px_0_0_0_#FF5500]"
+                        : "bg-[#111110]"
                     )}
                   >
                     <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="font-semibold text-[#EDEDEC]">
+                      <span
+                        className={cn(
+                          "font-semibold transition-colors",
+                          isSelected
+                            ? "text-[#EDEDEC]"
+                            : "text-[#B8B8B2] group-hover:text-[#EDEDEC]"
+                        )}
+                      >
                         <span className="mr-2 text-[#63635E]">0{index + 1}</span>
                         {meta.title}
                       </span>
@@ -317,7 +362,14 @@ export default function SimulateStudioPage() {
                         <span>{meta.tag}</span>
                       </span>
                     </div>
-                    <div className="truncate text-[11px] text-[#63635E]">
+                    <div
+                      className={cn(
+                        "truncate text-[11px] transition-colors",
+                        isSelected
+                          ? "text-[#9A9A94]"
+                          : "text-[#7A7A74] group-hover:text-[#9A9A94]"
+                      )}
+                    >
                       {preset.elfUrl}
                     </div>
                   </button>
@@ -346,6 +398,7 @@ export default function SimulateStudioPage() {
                   setDeclaredCycles(undefined);
                   setJobIdHint(undefined);
                   setProgramIdHint(undefined);
+                  setErrorMsg(null);
                   setElfUrl(e.target.value);
                 }}
                 placeholder="ar://... or https://github.com/.../releases/download/..."
@@ -451,7 +504,11 @@ export default function SimulateStudioPage() {
               disabled={isRunning}
               className="h-10 w-full rounded-[2px] bg-[#FF5500] font-mono text-xs font-semibold uppercase tracking-wider text-[#0B0B0A] transition-colors hover:bg-[#E04800] disabled:opacity-50"
             >
-              {isRunning ? "COMPUTING PRE-FLIGHT MODEL..." : "RUN PRE-FLIGHT ANALYSIS ->"}
+              {isRunning
+                ? "COMPUTING PRE-FLIGHT MODEL..."
+                : justAnalyzed
+                  ? "ANALYSIS UPDATED ●"
+                  : "RUN PRE-FLIGHT ANALYSIS ->"}
             </button>
 
             <div className="flex items-center justify-between border border-[#232320] bg-[#0B0B0A] px-2.5 py-2 text-[10px]">
@@ -460,14 +517,19 @@ export default function SimulateStudioPage() {
                 <span className="inline-flex items-center gap-1.5 font-semibold text-[#10B981]">
                   <span aria-hidden="true">●</span>
                   <span>ZKMINER-CLI BINARY</span>
+                  <InfoTip
+                    label="Simulation engine details"
+                    text="Executed directly against the host ZKMINER_BIN CLI binary."
+                  />
                 </span>
               ) : (
-                <span
-                  className="inline-flex items-center gap-1.5 text-[#FF5500]"
-                  title="Serverless preview models Protocol 12 cycles/VRAM without fetching or executing remote ELF binaries."
-                >
+                <span className="inline-flex items-center gap-1.5 text-[#FF5500]">
                   <span aria-hidden="true">◌</span>
                   <span>DETERMINISTIC MODEL (PREVIEW)</span>
+                  <InfoTip
+                    label="What is Deterministic Model Preview?"
+                    text="Serverless preview models Protocol 12 cycles and VRAM without downloading or executing remote ELF binaries. Set ZKMINER_BIN on a prover host to run live zkminer simulate."
+                  />
                 </span>
               )}
             </div>

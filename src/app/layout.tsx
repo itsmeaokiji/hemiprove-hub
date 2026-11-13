@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ArrowUpRight } from "lucide-react";
 import "@fontsource/inter/400.css";
 import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
@@ -46,25 +47,28 @@ export default function RootLayout({
                 href="https://explorer.hemi.xyz"
                 target="_blank"
                 rel="noreferrer"
-                className="hover:text-[#EDEDEC] transition-colors"
+                className="inline-flex items-center gap-1 transition-colors hover:text-[#EDEDEC]"
               >
-                EXPLORER 43111 ↗
+                <span>EXPLORER 43111</span>
+                <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" />
               </a>
               <a
                 href="https://testnet.explorer.hemi.xyz/address/0xE1a492Dc6D57fCC2B6deb5B64087E69666cA470e"
                 target="_blank"
                 rel="noreferrer"
-                className="hover:text-[#EDEDEC] transition-colors"
+                className="inline-flex items-center gap-1 transition-colors hover:text-[#EDEDEC]"
               >
-                ROUTER 743111 ↗
+                <span>ROUTER 743111</span>
+                <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" />
               </a>
               <a
                 href="https://github.com/hemilabs/zk-miner"
                 target="_blank"
                 rel="noreferrer"
-                className="hover:text-[#EDEDEC] transition-colors"
+                className="inline-flex items-center gap-1 transition-colors hover:text-[#EDEDEC]"
               >
-                HEMILABS/ZK-MINER ↗
+                <span>HEMILABS/ZK-MINER</span>
+                <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" />
               </a>
             </div>
           </footer>

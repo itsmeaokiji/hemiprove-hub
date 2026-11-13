@@ -93,6 +93,57 @@ export interface SimulatePreset {
   singleRun: boolean;
 }
 
+const SUPPORTED_ELF_SCHEMES = ["ar://", "ipfs://", "https://", "http://"] as const;
+
+/**
+ * Validates that an ELF binary location uses a supported storage/HTTP scheme (`ar://`, `ipfs://`,
+ * `http://`, or `https://`) without whitespace or missing resource identifiers.
+ */
+export function validateElfUri(
+  raw: string
+): { ok: true; normalized: string } | { ok: false; error: string } {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return {
+      ok: false,
+      error: "Please provide an ELF Binary URI (ar://..., ipfs://..., or https://...).",
+    };
+  }
+  if (/\s/.test(trimmed)) {
+    return { ok: false, error: "ELF Binary URI must not contain spaces." };
+  }
+
+  const lower = trimmed.toLowerCase();
+  const matchedScheme = SUPPORTED_ELF_SCHEMES.find((scheme) => lower.startsWith(scheme));
+  if (!matchedScheme) {
+    return {
+      ok: false,
+      error: "Unsupported ELF URI scheme. Use ar://, ipfs://, http://, or https://.",
+    };
+  }
+
+  if (matchedScheme === "http://" || matchedScheme === "https://") {
+    try {
+      const parsed = new URL(trimmed);
+      if (!parsed.hostname) {
+        return { ok: false, error: "HTTP(S) ELF URI must include a valid host." };
+      }
+    } catch {
+      return { ok: false, error: "Please enter a valid HTTP(S) ELF URI." };
+    }
+  } else {
+    const resourceId = trimmed.slice(matchedScheme.length);
+    if (resourceId.length < 3) {
+      return {
+        ok: false,
+        error: `Please include a valid resource identifier after ${matchedScheme}.`,
+      };
+    }
+  }
+
+  return { ok: true, normalized: trimmed };
+}
+
 export const SIMULATE_PRESETS: SimulatePreset[] = [
   {
     id: "btc-utxo-sp1",

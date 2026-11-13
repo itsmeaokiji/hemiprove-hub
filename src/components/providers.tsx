@@ -16,6 +16,8 @@ interface HemiNetworkContextValue {
   setLiveStreamEnabled: (enabled: boolean) => void;
   guideDismissed: boolean;
   setGuideDismissed: (dismissed: boolean) => void;
+  fieldGuideOpen: boolean;
+  setFieldGuideOpen: React.Dispatch<React.SetStateAction<boolean>>;
   hasHydrated: boolean;
 }
 
@@ -42,6 +44,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   // Default to DATA: DEMO stream on initial showcase boot; persisted across sessions in localStorage
   const [liveStreamEnabled, setLiveStreamState] = useState<boolean>(true);
   const [guideDismissed, setGuideDismissedState] = useState<boolean>(false);
+  const [fieldGuideOpen, setFieldGuideOpen] = useState<boolean>(false);
   const [hasHydrated, setHasHydrated] = useState<boolean>(false);
 
   useEffect(() => {
@@ -101,9 +104,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       setLiveStreamEnabled,
       guideDismissed,
       setGuideDismissed,
+      fieldGuideOpen,
+      setFieldGuideOpen,
       hasHydrated,
     }),
-    [networkKey, liveStreamEnabled, guideDismissed, hasHydrated]
+    [networkKey, liveStreamEnabled, guideDismissed, fieldGuideOpen, hasHydrated]
   );
 
   return (

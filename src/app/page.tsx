@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy } from "lucide-react";
+import { ArrowUpRight, Check, Copy } from "lucide-react";
 import { useHemiNetwork } from "@/components/providers";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -865,10 +865,13 @@ export default function MarketplacePage() {
                     href={`${deployment.explorerUrl}/address/${deployment.router}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex h-8 w-full items-center justify-center rounded-[2px] border border-[#232320] bg-[#0B0B0A] font-mono text-[11px] uppercase tracking-wider text-[#9A9A94] transition-colors hover:bg-[#181816] hover:text-[#EDEDEC]"
+                    className="flex h-8 w-full items-center justify-center gap-1.5 rounded-[2px] border border-[#232320] bg-[#0B0B0A] font-mono text-[11px] uppercase tracking-wider text-[#9A9A94] transition-colors hover:bg-[#181816] hover:text-[#EDEDEC]"
                   >
-                    INSPECT ROUTER ON{" "}
-                    {deployment.explorerUrl.replace("https://", "").toUpperCase()} ↗
+                    <span>
+                      INSPECT ROUTER ON{" "}
+                      {deployment.explorerUrl.replace("https://", "").toUpperCase()}
+                    </span>
+                    <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" />
                   </a>
                 </div>
               )}
@@ -1113,9 +1116,10 @@ export default function MarketplacePage() {
                           href={`${deployment.explorerUrl}/tx/${inspectedJob.txHash}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-[#9A9A94] underline decoration-[#232320] hover:text-[#EDEDEC] hover:decoration-[#FF5500]"
+                          className="inline-flex items-center gap-1 text-[#9A9A94] underline decoration-[#232320] hover:text-[#EDEDEC] hover:decoration-[#FF5500]"
                         >
-                          {shortenHex(inspectedJob.txHash, 6, 6)} ↗
+                          <span>{shortenHex(inspectedJob.txHash, 6, 6)}</span>
+                          <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" />
                         </a>
                       ) : (
                         <span className="text-[#9A9A94]">
@@ -1132,9 +1136,10 @@ export default function MarketplacePage() {
                           href={`${deployment.explorerUrl}/tx/${inspectedJob.fulfillTxHash}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-[#10B981] underline decoration-[#232320] hover:decoration-[#10B981]"
+                          className="inline-flex items-center gap-1 text-[#10B981] underline decoration-[#232320] hover:decoration-[#10B981]"
                         >
-                          {shortenHex(inspectedJob.fulfillTxHash, 6, 6)} ↗
+                          <span>{shortenHex(inspectedJob.fulfillTxHash, 6, 6)}</span>
+                          <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" />
                         </a>
                       ) : (
                         <span className="text-[#10B981]">
@@ -1151,10 +1156,13 @@ export default function MarketplacePage() {
                       href={`${deployment.explorerUrl}/address/${deployment.router}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex h-8 w-full items-center justify-center rounded-[2px] border border-[#232320] bg-[#0B0B0A] font-mono text-[11px] uppercase tracking-wider text-[#9A9A94] transition-colors hover:bg-[#181816] hover:text-[#EDEDEC]"
+                      className="flex h-8 w-full items-center justify-center gap-1.5 rounded-[2px] border border-[#232320] bg-[#0B0B0A] font-mono text-[11px] uppercase tracking-wider text-[#9A9A94] transition-colors hover:bg-[#181816] hover:text-[#EDEDEC]"
                     >
-                      INSPECT ON{" "}
-                      {deployment.explorerUrl.replace("https://", "").toUpperCase()} ↗
+                      <span>
+                        INSPECT ON{" "}
+                        {deployment.explorerUrl.replace("https://", "").toUpperCase()}
+                      </span>
+                      <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" />
                     </a>
                   </div>
                 ) : (

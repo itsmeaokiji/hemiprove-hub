@@ -151,6 +151,19 @@ describe("API Route Integration Tests (Offline Mocked)", () => {
     );
     assert.equal(missingUrlRes.status, 400);
 
+    const badSchemeRes = await postSimulate(
+      new NextRequest("http://localhost/api/simulate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          elfUrl: "invalid://not-a-valid-uri",
+          targetZkvm: "risc0",
+          stdin: "0x01",
+        }),
+      })
+    );
+    assert.equal(badSchemeRes.status, 400);
+
     const preset = SIMULATE_PRESETS[2] ?? SIMULATE_PRESETS[0];
     const simRes = await postSimulate(
       new NextRequest("http://localhost/api/simulate", {

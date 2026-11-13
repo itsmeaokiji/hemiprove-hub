@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
   runDeterministicSimulation,
+  validateElfUri,
   type SimulateInputPayload,
   type SimulateReportJson,
 } from "@/lib/simulate-engine";
@@ -146,8 +147,16 @@ export async function POST(request: NextRequest) {
         ? body.targetZkvm
         : "risc0";
 
+    const uriCheck = validateElfUri(body.elfUrl ?? "");
+    if (!uriCheck.ok) {
+      return NextResponse.json(
+        { ok: false, error: uriCheck.error },
+        { status: 400 }
+      );
+    }
+
     const payload: SimulateInputPayload = {
-      elfUrl: (body.elfUrl ?? "").trim(),
+      elfUrl: uriCheck.normalized,
       targetZkvm,
       stdin: body.stdin ?? "",
       singleRun: Boolean(body.singleRun),
@@ -158,13 +167,6 @@ export async function POST(request: NextRequest) {
       jobId: typeof body.jobId === "string" ? body.jobId : undefined,
       programId: typeof body.programId === "string" ? body.programId : undefined,
     };
-
-    if (!payload.elfUrl) {
-      return NextResponse.json(
-        { ok: false, error: "Please provide an ELF Binary URL (`ar://...` or GitHub Release URL)." },
-        { status: 400 }
-      );
-    }
 
     // Attempt local `zkminer simulate` binary if present and a 32-byte on-chain jobId is provided
     const zkminerBin = process.env.ZKMINER_BIN || "zkminer";

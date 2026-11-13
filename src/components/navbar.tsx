@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Check, Copy } from "lucide-react";
+import { ArrowUpRight, Check, Copy } from "lucide-react";
 import { useHemiNetwork } from "@/components/providers";
 import { InfoTip } from "@/components/ui/info-tip";
 import { cn, shortenHex } from "@/lib/utils";
@@ -65,8 +65,8 @@ export function Navbar() {
     deployment,
     liveStreamEnabled,
     setLiveStreamEnabled,
-    guideDismissed,
-    setGuideDismissed,
+    fieldGuideOpen,
+    setFieldGuideOpen,
     hasHydrated,
   } = useHemiNetwork();
 
@@ -131,14 +131,14 @@ export function Navbar() {
                   target="_blank"
                   rel="noreferrer"
                   title={`Inspect Router ${deployment.router} on ${deployment.explorerUrl}`}
-                  className="text-[#EDEDEC] underline decoration-[#232320] transition-colors hover:text-[#FF5500] hover:decoration-[#FF5500]"
+                  className="inline-flex items-center gap-1 text-[#EDEDEC] underline decoration-[#232320] transition-colors hover:text-[#FF5500] hover:decoration-[#FF5500]"
                 >
                   <span>{shortenHex(deployment.router, 4, 4)}</span>
                   <span className="hidden sm:inline">
                     {" "}
                     ({deployment.routerStatusTag})
-                  </span>{" "}
-                  ↗
+                  </span>
+                  <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" />
                 </a>
                 <button
                   type="button"
@@ -313,24 +313,31 @@ export function Navbar() {
             </button>
           </div>
 
-          {guideDismissed && (
-            <button
-              type="button"
-              onClick={() => setGuideDismissed(false)}
-              title="Restore workflow guide bar"
-              className="hidden h-7 items-center rounded-[2px] border border-[#232320] bg-[#0B0B0A] px-2 font-mono text-[11px] text-[#63635E] transition-colors hover:bg-[#181816] hover:text-[#EDEDEC] lg:inline-flex"
-            >
-              GUIDE [?]
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setFieldGuideOpen((prev) => !prev)}
+            aria-expanded={fieldGuideOpen}
+            aria-label="Toggle Field Reference Guide"
+            title="Toggle Field Reference Guide (modes, Dutch auctions, zkOP/s & po2)"
+            className={cn(
+              "inline-flex h-7 items-center rounded-[2px] border px-1.5 sm:px-2 font-mono text-[10px] sm:text-[11px] uppercase tracking-wider transition-colors",
+              fieldGuideOpen
+                ? "border-[#FF5500] bg-[#181816] text-[#EDEDEC]"
+                : "border-[#232320] bg-[#0B0B0A] text-[#9A9A94] hover:bg-[#181816] hover:text-[#EDEDEC]"
+            )}
+          >
+            <span className="sm:hidden">[?]</span>
+            <span className="hidden sm:inline">GUIDE [?]</span>
+          </button>
 
           <a
             href="https://github.com/hemilabs/zk-miner"
             target="_blank"
             rel="noreferrer"
-            className="hidden h-7 items-center rounded-[2px] border border-[#232320] bg-[#0B0B0A] px-2.5 font-mono text-[11px] uppercase tracking-wider text-[#9A9A94] transition-colors hover:bg-[#181816] hover:text-[#EDEDEC] xl:inline-flex"
+            className="hidden h-7 items-center gap-1 rounded-[2px] border border-[#232320] bg-[#0B0B0A] px-2.5 font-mono text-[11px] uppercase tracking-wider text-[#9A9A94] transition-colors hover:bg-[#181816] hover:text-[#EDEDEC] xl:inline-flex"
           >
-            ZK-MINER ↗
+            <span>ZK-MINER</span>
+            <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" />
           </a>
         </div>
       </div>
