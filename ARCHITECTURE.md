@@ -14,7 +14,7 @@ flowchart TD
         RPC["Hemi JSON-RPC\ntestnet.rpc.hemi.network/rpc\nrpc.hemi.network/rpc"]
         BS["Blockscout v2 REST API\n/api/v2/addresses/{router}/logs"]
         RTR["HemiProveRouter Proxy\n0xE1a4...470e (5 Facets)"]
-        PRG["ProgramRegistry Proxy\n0xCC76...5cAb4"]
+        PRG["ProgramRegistry Proxy\n0xCC76...cAb4"]
     end
 
     subgraph NextServer["Next.js App Router API Layer"]
@@ -66,7 +66,11 @@ hemiprove-hub/
 ├── LICENSE                           # MIT open-source license
 ├── README.md                         # Overview, contract matrix, and quickstart guide
 ├── next.config.mjs                   # Next.js 15 build & outputFileTracingRoot config
+├── package.json                      # Dependencies and scripts (`dev`, `build`, `lint`, `test`)
+├── pnpm-lock.yaml                    # Locked dependency graph
 ├── tailwind.config.ts                # Datasheet color tokens, JetBrains Mono & Inter fonts
+├── scripts/
+│   └── register-paths.mjs            # Node loader hooks resolving `@/*` & TS extensions for `pnpm test`
 └── src/
     ├── app/
     │   ├── api/
@@ -87,6 +91,8 @@ hemiprove-hub/
     ├── data/
     │   └── seed-benchmarks.json      # 13 calibrated NVIDIA CUDA, AMD ROCm/HIP & Intel SYCL baselines
     └── lib/
+        ├── __tests__/
+        │   └── hemiprove.test.ts     # Unit tests (AuctionMath, parser, simulation, codegen, KPIs)
         ├── benchmark-parser.ts       # Dual `zkminer benchmark` CLI stdout & `--json` parser
         ├── code-generator.ts         # Solidity (`IHemiProveCallback`) & TypeScript (`viem`) codegen
         ├── hemi-chain.ts             # Chain definitions, deployments, code pins, proofSystemIds, AuctionMath

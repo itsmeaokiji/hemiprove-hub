@@ -7,7 +7,7 @@
 
 **HemiProve Hub** is an open-source ecosystem telemetry explorer, multi-vendor GPU `zkOP/s` benchmark datasheet, and browser-based `zkminer simulate` sizing studio built for **hemiProve** — Hemi Network's decentralized, prover-agnostic ZK proving marketplace.
 
-Built directly against the ground-truth ABIs, deployment pins, and Protocol 12 sizing rules in [`hemilabs/zk-miner`](https://github.com/hemilabs/zk-miner), HemiProve Hub gives **protocol engineers**, **dApp requesters**, and **community GPU miners** a unified workbench to inspect live auctions, compare hardware efficiency across NVIDIA/AMD/Intel stacks, and audit guest ELF workloads before posting or claiming on-chain jobs.
+Built directly against the ground-truth ABIs, deployment pins, and Protocol 12 sizing rules in [`hemilabs/zk-miner`](https://github.com/hemilabs/zk-miner), HemiProve Hub gives **protocol engineers**, **dApp requesters**, and **community GPU miners** a unified workbench to inspect live auctions, compare hardware efficiency across NVIDIA/AMD/Intel stacks, and pre-flight model guest ELF workloads (using deterministic sizing in browser/serverless deployments, or an optional local `zkminer` CLI binary) before posting or claiming on-chain jobs.
 
 ---
 
@@ -77,7 +77,7 @@ Source of truth: [`hemilabs/zk-miner`](https://github.com/hemilabs/zk-miner) (`c
 ## Local Setup & Development
 
 ### Prerequisites
-- **Node.js** `>= 20.0.0` (tested on Node `v22` and `v24`)
+- **Node.js** `>= 20.0.0` for build/runtime (use **Node `>= 22.18` or `24`** to run `pnpm test` with Node's native TypeScript runner)
 - **pnpm** (recommended, lockfile included) or **npm**
 - *(Optional)* [`zkminer`](https://github.com/hemilabs/zk-miner) binary on `PATH` (or set `ZKMINER_BIN` in `.env.local`) if you wish `/api/simulate` to invoke local `zkminer simulate <jobId>` subprocesses alongside the built-in deterministic analyzer.
 
@@ -131,6 +131,25 @@ pnpm start    # Serves production build on port 3000
    *(Tip: On 12 GiB VRAM GPUs such as RTX 4070 or Arc B580 that sit below the default 14 GiB gate, run `zkminer benchmark --calibrate` to profile `po2=19`.)*
 2. Open **`/benchmarks`** in HemiProve Hub and click **`+ SUBMIT ZKMINER BENCHMARK`** (or switch the right control rail to `02 // SUBMIT CLI OUTPUT`).
 3. Paste your raw CLI stdout or JSON output — the parser automatically extracts `zkOP/s`, STARK cycle rate, `po2`, Groth16 wrap latency, TDP wattage, and workload timings, adding your card directly to the datasheet and ROI calculator.
+
+---
+
+## Scope & Serverless Prototype Notes
+
+- **Stateless Community Benchmark Store:** `/benchmarks` validates submissions server-side (up to `100,000` characters per payload with `id`-based deduplication) and keeps new entries in serverless process memory plus browser `localStorage` — there is no external database, authentication, or per-IP rate limiter yet.
+- **Serverless Deterministic Preview:** When deployed on serverless hosts without `ZKMINER_BIN` (such as Vercel), `/simulate` runs deterministic Protocol 12 modeling (`ENGINE: DETERMINISTIC MODEL (PREVIEW)`) rather than fetching or executing raw ELF binaries.
+- **Read-Only Chain Client & Codegen:** HemiProve Hub never asks for private keys or executes wallet transactions in the browser; exported Solidity and `viem` artifacts are reviewed and run locally by the user. `pnpm lint` runs strict `tsc --noEmit` type verification (no separate ESLint config is included).
+
+---
+
+## Roadmap & Milestones
+
+| Milestone | Summary | Status / Trigger |
+| :--- | :--- | :---: |
+| **M1: Core Workbench & Sepolia Parity** | Live Hemi Sepolia (`743111`) Explorer, `13`-GPU `zkOP/s` Leaderboard & ROI Studio, pre-flight sizing & hardened contract/SDK export, and unit tests. | `Shipped` |
+| **M2: Explorer Depth & CI Hardening** | Real-time settlement duration and verified cycle tracking from on-chain events, expanded router ABI support, ESLint + API route tests, and automated CI checks. | `Next` |
+| **M3: `zk-miner` Sync & Persistent Benchmarks** | Sync updated SP1 VRAM tiers (`PR #33`) and blended dual-zkVM `MzkOP/s` ranking once merged upstream, plus persistent database storage and rate limits for `/benchmarks`. | `Upstream & DB` |
+| **M4: Mainnet (`43111`) & Execution Extensions** | Activate Hemi Mainnet support upon official router launch, plus optional browser wallet job submission and remote `zkminer` worker execution. | `Post-Mainnet` |
 
 ---
 

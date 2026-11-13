@@ -50,9 +50,9 @@
 
 ## 4. Global Shell & Split Workbench Architecture
 
-1. **Top Protocol Telemetry Bar (`h-8`):** Live chain status dot, active chain (`HEMI MAINNET [43111]` / `HEMI SEPOLIA [743111]`), copyable `HemiProve` router address, `zkOP` baseline formula, verifier adapter status tags (`RISC0: ACTIVE`, `SP1: ACTIVE`, `OPENVM: ACTIVE`), and RPC block/latency telemetry.
+1. **Top Protocol Telemetry Bar (`h-8`):** Live chain status dot, active chain (`HEMI MAINNET [43111]` / `HEMI SEPOLIA [743111]`), copyable `HemiProve` router address, `zkOP` baseline formula, verifier adapter status tags (`RISC0`, `SP1`, `OPENVM`), and block/API latency telemetry (`API <ms>ms`).
 2. **Main Workbench Header (`h-12`):** Wordmark `HEMIPROVE // HUB` + flush vertical-divider tabs (`[01] MARKETPLACE`, `[02] GPU BENCHMARKS`, `[03] SIMULATE STUDIO`) with `#FF5500` `2px` active bottom indicator + physical-style `MAINNET 43111` / `SEPOLIA 743111` and `DATA: LIVE / DEMO` hardware switches.
 3. **Master-Detail Workbenches:**
    - `/` — 4-Cell Flush Metric Strip + `8 / 4` Split Auction Table & Docked Job Telemetry Inspector.
    - `/benchmarks` — Hardware Filter Strip + `8 / 4` Split GPU Datasheet Table (with inline `#FF5500` `zkOP/s` proportion bars) & Dual-Mode Control Rail (`01 // ROI CALCULATOR` | `02 // SUBMIT CLI OUTPUT`).
-   - `/simulate` — `5 / 7` Compiler Split Console (`01 // LOAD PRESET WORKLOAD`, `02 // ELF BINARY & EXECUTION PARAMETERS`) & Diagnostic Output (`3-Cell Strip`, `03 // RISC0-PUBLIC-V3 7-SEGMENT AUDIT MATRIX`, `04 // ARTIFACT & CONTRACT GENERATOR`).
+   - `/simulate` — `5 / 7` Compiler Split Console (`01 // LOAD PRESET WORKLOAD`, `02 // ELF BINARY & EXECUTION PARAMETERS`) & Diagnostic Output (`3-Cell Strip`, `03 // KECCAK CHARGES & EVIDENCE`, `04 // RISC0-PUBLIC-V3 7-SEGMENT AUDIT MATRIX`, `05 // ARTIFACT & CONTRACT GENERATOR`).
