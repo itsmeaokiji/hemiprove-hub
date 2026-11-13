@@ -13,6 +13,33 @@ import { Providers } from "@/components/providers";
 import { Navbar } from "@/components/navbar";
 import { OnboardingStrip } from "@/components/onboarding-strip";
 
+const FOOTER_LINKS = [
+  {
+    href: "https://github.com/itsmeaokiji/hemiprove-hub",
+    label: "GITHUB",
+    title: "HemiProve Hub source code (MIT)",
+    emphasize: true,
+  },
+  {
+    href: "https://explorer.hemi.xyz",
+    label: "EXPLORER 43111",
+    title: "Hemi Mainnet block explorer",
+    emphasize: false,
+  },
+  {
+    href: "https://testnet.explorer.hemi.xyz/address/0xE1a492Dc6D57fCC2B6deb5B64087E69666cA470e",
+    label: "ROUTER 743111",
+    title: "Active HemiProveRouter on Hemi Sepolia",
+    emphasize: false,
+  },
+  {
+    href: "https://github.com/hemilabs/zk-miner",
+    label: "HEMILABS/ZK-MINER",
+    title: "Official Hemi Labs zk-miner repository",
+    emphasize: false,
+  },
+] as const;
+
 export const metadata: Metadata = {
   title: "HEMIPROVE // HUB — Community ZK Marketplace Telemetry, GPU zkOP/s & Simulate Studio",
   description:
@@ -42,34 +69,24 @@ export default function RootLayout({
               <span className="hidden xl:inline">|</span>
               <span className="hidden xl:inline">PROTOCOL: V12 (RISC0-PUBLIC-V3)</span>
             </div>
-            <div className="flex items-center gap-4">
-              <a
-                href="https://explorer.hemi.xyz"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 transition-colors hover:text-[#EDEDEC]"
-              >
-                <span>EXPLORER 43111</span>
-                <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-              </a>
-              <a
-                href="https://testnet.explorer.hemi.xyz/address/0xE1a492Dc6D57fCC2B6deb5B64087E69666cA470e"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 transition-colors hover:text-[#EDEDEC]"
-              >
-                <span>ROUTER 743111</span>
-                <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-              </a>
-              <a
-                href="https://github.com/hemilabs/zk-miner"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 transition-colors hover:text-[#EDEDEC]"
-              >
-                <span>HEMILABS/ZK-MINER</span>
-                <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-              </a>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              {FOOTER_LINKS.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={link.title}
+                  className={
+                    link.emphasize
+                      ? "inline-flex items-center gap-1 text-[#9A9A94] transition-colors hover:text-[#EDEDEC]"
+                      : "inline-flex items-center gap-1 transition-colors hover:text-[#EDEDEC]"
+                  }
+                >
+                  <span>{link.label}</span>
+                  <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+                </a>
+              ))}
             </div>
           </footer>
         </Providers>

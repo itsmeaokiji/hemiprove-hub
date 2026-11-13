@@ -331,12 +331,13 @@ export function Navbar() {
           </button>
 
           <a
-            href="https://github.com/hemilabs/zk-miner"
+            href="https://github.com/itsmeaokiji/hemiprove-hub"
             target="_blank"
             rel="noreferrer"
+            title="View HemiProve Hub open-source repository on GitHub"
             className="hidden h-7 items-center gap-1 rounded-[2px] border border-[#232320] bg-[#0B0B0A] px-2.5 font-mono text-[11px] uppercase tracking-wider text-[#9A9A94] transition-colors hover:bg-[#181816] hover:text-[#EDEDEC] xl:inline-flex"
           >
-            <span>ZK-MINER</span>
+            <span>GITHUB</span>
             <ArrowUpRight className="h-3 w-3 shrink-0" aria-hidden="true" />
           </a>
         </div>
