@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy } from "lucide-react";
 import { useHemiNetwork } from "@/components/providers";
 import { Input } from "@/components/ui/input";
@@ -61,7 +61,9 @@ export default function MarketplacePage() {
     deployment,
     liveStreamEnabled,
     setLiveStreamEnabled,
+    hasHydrated,
   } = useHemiNetwork();
+  const queryClient = useQueryClient();
 
   const [tickSecs, setTickSecs] = useState(0);
   const [statusFilter, setStatusFilter] = useState<"ALL" | JobStatusLabel>("ALL");
@@ -70,6 +72,7 @@ export default function MarketplacePage() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [mobilePane, setMobilePane] = useState<"table" | "inspector">("table");
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -78,15 +81,37 @@ export default function MarketplacePage() {
     return () => clearInterval(interval);
   }, []);
 
-  const { data, isFetching, refetch } = useQuery<MarketplaceApiResponse>({
-    queryKey: ["marketplace", networkKey],
+  const modeKey = liveStreamEnabled ? "demo" : "live";
+  const { data, isFetching } = useQuery<MarketplaceApiResponse>({
+    queryKey: ["marketplace", networkKey, modeKey],
     queryFn: async () => {
-      const res = await fetch(`/api/marketplace?network=${networkKey}`);
+      const res = await fetch(`/api/marketplace?network=${networkKey}&mode=${modeKey}`);
       if (!res.ok) throw new Error("Failed to load marketplace feed");
       return res.json();
     },
+    enabled: hasHydrated,
     refetchInterval: 20_000,
   });
+
+  const handleForceSync = async () => {
+    setIsManualSyncing(true);
+    try {
+      await queryClient.fetchQuery({
+        queryKey: ["marketplace", networkKey, modeKey],
+        queryFn: async () => {
+          const res = await fetch(
+            `/api/marketplace?network=${networkKey}&mode=${modeKey}&refresh=1`
+          );
+          if (!res.ok) throw new Error("Failed to refresh marketplace feed");
+          return res.json() as Promise<MarketplaceApiResponse>;
+        },
+      });
+    } catch {
+      // keep existing query state on transient error
+    } finally {
+      setIsManualSyncing(false);
+    }
+  };
 
   const isMainnetStaged = networkKey === "mainnet" && !deployment.router;
 
@@ -102,7 +127,10 @@ export default function MarketplacePage() {
         )
       );
     }
-    return data?.kpis ?? buildBaselineKpis(networkKey, null, null);
+    return (
+      data?.kpis ??
+      buildBaselineKpis(networkKey, buildBaselineJobs(networkKey), null)
+    );
   }, [data, deployment.deployed, liveStreamEnabled, networkKey]);
 
   // Compute escalating Reverse Dutch Auction prices (strictly onChainJobs in LIVE mode)
@@ -469,10 +497,10 @@ export default function MarketplacePage() {
                 variant="secondary"
                 size="sm"
                 className="shrink-0"
-                onClick={() => refetch()}
-                disabled={isFetching}
+                onClick={handleForceSync}
+                disabled={isFetching || isManualSyncing}
               >
-                {isFetching ? "SYNCING..." : "SYNC RPC"}
+                {isFetching || isManualSyncing ? "SYNCING..." : "SYNC RPC"}
               </Button>
             </div>
           </div>

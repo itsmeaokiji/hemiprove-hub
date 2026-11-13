@@ -6,7 +6,7 @@ This document details the system architecture, on-chain indexing pipeline, ABI c
 
 ## 1. System Topology & Data Flow
 
-HemiProve Hub is a Next.js 15 App Router application (`TypeScript 5.8`, `React 19`, `viem 2.x`, `wagmi 2.x`, `TanStack Query v5`) structured around three master-detail telemetry workbenches sharing a single global chain and data-mode context.
+HemiProve Hub is a Next.js 15 App Router application (`TypeScript 5.8`, `React 19`, `viem 2.x`, `TanStack Query v5`) structured around three master-detail telemetry workbenches sharing a single global chain and data-mode context.
 
 ```mermaid
 flowchart TD
@@ -82,10 +82,10 @@ hemiprove-hub/
     ├── components/
     │   ├── navbar.tsx                # Protocol telemetry bar + chain/mode hardware switches
     │   ├── onboarding-strip.tsx      # Dismissible 1-line 3-step workflow bar (localStorage-persisted)
-    │   ├── providers.tsx             # Wagmi + React Query + HemiNetworkContext global provider
-    │   └── ui/                       # Datasheet primitives (info-tip portal, button, input, switch, badge, card)
+    │   ├── providers.tsx             # React Query + HemiNetworkContext global provider
+    │   └── ui/                       # Datasheet primitives (info-tip portal, button, input, switch)
     ├── data/
-    │   └── seed-benchmarks.json      # 12 verified NVIDIA CUDA, AMD ROCm/HIP & Intel SYCL baselines
+    │   └── seed-benchmarks.json      # 13 calibrated NVIDIA CUDA, AMD ROCm/HIP & Intel SYCL baselines
     └── lib/
         ├── benchmark-parser.ts       # Dual `zkminer benchmark` CLI stdout & `--json` parser
         ├── code-generator.ts         # Solidity (`IHemiProveCallback`) & TypeScript (`viem`) codegen
@@ -113,25 +113,25 @@ In `zkmarket@c8333aa` (mirrored from `crates/zkminer-chain/src/deployment.rs`), 
 - `sp1V6_1_0Groth16VerifierHash`: `0x4388a21c687fdd5f218d7e3d13190cac4c5355818d3605fd5fb811df468ee696`
 
 ### 3.2 Chain State Isolation (`743111` Active vs `43111` Staged)
-`HemiNetworkContext` (`src/components/providers.tsx`) defaults to `networkKey = "sepolia"` (`743111`) and `liveStreamEnabled = false` (`DATA: LIVE`):
+`HemiNetworkContext` (`src/components/providers.tsx`) defaults to `networkKey = "sepolia"` (`743111`) and `liveStreamEnabled = true` (`DATA: DEMO` showcase stream, persisted in `localStorage` once toggled):
 - **Sepolia (`743111`):** `deployment.deployed = true`, `router = 0xE1a4...470e`, all three verifier indicators (`RISC0`, `SP1`, `OPENVM`) report `ACTIVE`.
-- **Mainnet (`43111`):** While `NEXT_PUBLIC_MAINNET_HEMIPROVE_ROUTER` is unset, `deployment.router = null`. The UI renders `ROUTER: STAGED (PRE-DEPLOYMENT)`, suppresses broken Mainnet router links so Sepolia addresses never leak onto `explorer.hemi.xyz`, sets verifiers to `RISC0: STAGED`, `SP1: STAGED`, `OPENVM: 743111-ONLY` (per `INTERACTION_GUIDE.md` §3), and injects explicit staged-deployment warnings into generated Solidity/Viem code.
+- **Mainnet (`43111`):** While `NEXT_PUBLIC_MAINNET_HEMIPROVE_ROUTER` is unset, `deployment.router = null`. The UI renders `ROUTER: STAGED (PRE-DEPLOYMENT)`, suppresses broken Mainnet router links so Sepolia addresses never leak onto `explorer.hemi.xyz`, sets verifiers to `RISC0: STAGED`, `SP1: STAGED`, `OPENVM: 743111-ONLY` (per `INTERACTION_GUIDE.md` §3), and emits `address(0)` + explicit staged-deployment guards into generated Solidity/Viem code so Sepolia router addresses never mix with Mainnet HEMI.
 
 ### 3.3 Multi-Stage On-Chain Discovery Pipeline (`GET /api/marketplace`)
-When querying an active deployment, `src/app/api/marketplace/route.ts` executes a 3-stage pipeline with strict `4,500 ms` timeouts so UI responsiveness never degrades:
+When querying an active deployment, `src/app/api/marketplace/route.ts` caches responses per `${network}:${mode}` for `15s` (`?refresh=1` bypasses) and executes a 3-stage pipeline with strict `4,500 ms` timeouts so UI responsiveness never degrades:
 
 1. **Router State + Fast RPC Window Scan:**
    - Reads `jobIndex()`, `paused()`, and `totalPaidToProvers()` in parallel via `Promise.allSettled`.
-   - Scans `JobSubmitted` logs across `[max(headBlock - 2000, scanFromBlock), headBlock]` (`scanFromBlock = 7,095,745` on Sepolia).
+   - Scans `JobSubmitted` logs across `[max(headBlock - 2000, scanFromBlock), headBlock]` (`scanFromBlock = 7,095,745` on Sepolia), retaining up to `36` recent candidates so cancelled bursts never crowd out active jobs.
 2. **Historical Blockscout v2 Log Backfill:**
-   - Whenever the `2,000`-block RPC window yields `< 5` candidate jobs (e.g., quiet rehearsal intervals), fetches `${blockscoutApiUrl}/addresses/${router}/logs` and decodes historical `JobSubmitted` events via `viem`'s `decodeEventLog` against `HEMI_PROVE_ROUTER_ABI`.
+   - Whenever fewer than `12` candidate jobs exist in the `2,000`-block RPC window, fetches `${blockscoutApiUrl}/addresses/${router}/logs` and decodes historical `JobSubmitted` events via `viem`'s `decodeEventLog` against `HEMI_PROVE_ROUTER_ABI` (preserving `block_timestamp` when present).
 3. **On-Chain Enrichment (`ProgramRegistry` + `getJobStatusView`):**
    - Deduplicates non-zero `programId` values and queries `ProgramRegistry` (`0xCC761A929747A81e34517e1f4F98247da925cAb4`) via `getProgram(programId)` (program name, `familyId`, `resources.estimatedCycles`) and `getStorageURIs(programId)` (`StorageType`: `0 = IPFS`, `1 = Arweave`, `2 = HTTP`, `3 = Custom`).
-   - Calls `HemiProveRouter.getJobStatusView(jobId)` and `eth_getCode(caller)` for each job:
+   - Queries `HemiProveRouter.getJobStatusView(jobId)` and `eth_getCode(caller)` in batches of `12` until up to `12` valid jobs are collected:
      - Maps `JobStatus`: `1 -> Open`, `2 -> Claimed`, `3 -> Verified (Fulfilled)`, and filters out `0 (None)` and `4 (Cancelled)` so cancelled rehearsal jobs are never misclassified as open auctions.
      - Classifies `caller` bytecode (`code !== "0x"`) into `Smart Contract` vs `EOA`.
 4. **Strict `LIVE` vs `DEMO` Separation:**
-   - In `DATA: LIVE` (`!liveStreamEnabled`), `src/app/page.tsx` consumes `data.onChainJobs` and `data.liveKpis` exclusively. If `0` active jobs match, both the table and the right-hand Inspector render synchronized empty states with one-click switches to `DEMO` stream or `SEPOLIA 743111` — never falling back to mocked KPI numbers or synthetic job rows.
+   - In `DATA: LIVE` (`!liveStreamEnabled`), `src/app/page.tsx` consumes `data.onChainJobs` and `data.liveKpis` exclusively. If `0` active jobs match, both the table and the right-hand Inspector render synchronized empty states with one-click switches to `DEMO` stream or `SEPOLIA 743111` — never falling back to mocked KPI numbers or synthetic job rows. In `DATA: DEMO`, `buildBaselineKpis` derives KPI counts directly from the displayed jobs slice.
 
 ---
 
@@ -173,15 +173,15 @@ $$
    - **STARK Rate & Groth16 Wrap Split (`program_stages`):**
      - `DeviceBenchmark::stark_rate()` computes the **cycle-weighted STARK rate** across the 5 priced suite programs ($\sum \text{cycles} / \sum \text{stark\_secs}$, excluding `zkop-mix`), while `DeviceBenchmark::wrap_secs()` takes the **median** Groth16 wrap latency (timed across all 5 programs on RISC Zero, or once by difference on the final `chacha-mix` program on SP1 after GPU warm-up is paid).
 
-3. **Windows Native Vendor Driver Telemetry (`crates/zkminer-tui/src/windows_telemetry/`):**
+3. **Windows Native Vendor Driver Telemetry (`crates/zkminer-tui/src/windows_telemetry/` on `main`; moving to `crates/zkminer-prover/src/windows_telemetry/` in `max/splash-progress-bars` `df6c7f8`):**
    - On Windows (where `/sys/class/drm` is absent), `zkminer` loads vendor driver libraries at runtime and joins physical cards by canonical 4-digit domain PCI bus ID (`0000:bus:dev.fn`):
      - **Intel (`IGCL` / `ControlLib.dll`):** Negotiated slot PCIe link (`Gen1`–`Gen6` x width), GPU/VRAM temperatures & clocks, energy/activity counter-delta power & utilization, and throttle limits (`PL1`, `THERMAL`).
      - **AMD (`ADLX` / `amdadlx64.dll`):** Negotiated slot PCIe link, edge/hotspot/memory temperatures, clocks, board power, utilization, fan RPM, voltage, and VRAM used/total.
      - **NVIDIA (`NVML` / `nvml.dll`):** Negotiated slot PCIe link (`current_pcie_link_gen` / `current_pcie_link_width`), clocks, temperatures, fan, VRAM, and power draw.
 
 4. **Dual CLI & JSON Ingestion (`parseZkMinerBenchmark`):**
-   - **`zkminer benchmark --json` (`BenchmarkSuite` schema):** Reads top-level `zkops`, `gpu_power_watts`, `host_peaks`, `results[]` (`program_name`, `prover_backend`, `duration: { secs, nanos }`, `throughput`, `weight`), and `device_benchmarks[]` (`device_label`, `prover_backend`, `optimal_po2`, `memory_usage_bytes`, `pci_bus_id`, `host_peak_bytes`, and `program_stages[]`).
-   - **Raw `zkminer benchmark` CLI stdout:** Extracts `zkOP/s: <score>`, per-card `<device> / <backend>: <score>` lines, `Device Benchmarks` rows, and `Proving stages` sub-tables (including the `Groth16 wrap <w>s ... + N / <rate>` summary footer).
+   - **`zkminer benchmark --json` (`BenchmarkSuite` schema):** Reads top-level `zkops` / `mzkops`, `gpu_power_watts`, `host_peaks`, `results[]` (`program_name`, `prover_backend`, `duration: { secs, nanos }`, `throughput`, `weight`), and `device_benchmarks[]` (`device_label`, `prover_backend`, `optimal_po2`, `memory_usage_bytes`, `pci_bus_id`, `host_peak_bytes`, and `program_stages[]`).
+   - **Raw `zkminer benchmark` CLI stdout:** Extracts `zkOP/s: <score>`, upcoming blended `MzkOP/s` (`max/splash-progress-bars`, `ZKOP_SP1_PER_RISC0 = 3.71`), per-card `<device> / <backend>: <score>` lines, `Device Benchmarks` rows, and `Proving stages` sub-tables (using `Groth16 wrap <w>s ... + N / <rate>` footer first, or cycle-weighted `sum(cycles) / sum(stark_secs)` across suite rows when omitted). Assigns deterministic fingerprint IDs and rejects non-positive `tdpWatts`.
 
 Hardware energy efficiency (`SORT: ZKOP/WATT`) is computed as $\frac{\text{zkOP/s}}{\text{TDP}_{\text{watts}}}$.
 
@@ -237,7 +237,7 @@ If any segment size violates this invariant (as demonstrated in Preset #3 `Segme
 
 #### B. GPU VRAM Tier Gates
 - **RISC Zero (`risc0`):** Peak device memory at `po2 = 20` is `12,436 MiB` (clearing `zkminer`'s `14 GiB` default consumer gate; `12 GiB` cards calibrate down to `po2 = 19` at `8,920 MiB`). Workloads exceeding `140M` charged cycles recommend the **24 GiB+ Flagship Tier** so the `3.45 GB` Groth16 SRS stays resident in VRAM (`>= 20 GiB` rule).
-- **Succinct SP1 (`sp1`):** Workloads $\le 134{,}217{,}728$ (`134M`) elements fit inside the **16 GiB Standard Worker** (`15,092 MiB` peak VRAM on CUDA 12.9 / ROCm 10.1); larger workloads step up to the **24 GiB+ High-Threshold Worker** (`268M` elements, `17,766 MiB` peak VRAM).
+- **Succinct SP1 (`sp1`):** On `main` (`zkmarket@c8333aa`), workloads $\le 134{,}217{,}728$ (`134M`) elements size to **16 GiB** (`15,092 MiB` peak VRAM on CUDA 12.9 / ROCm 10.1), and larger workloads step up to **24 GiB+** (`268M` elements, `17,766 MiB`). *(Pending upstream `PR #33` `b5de292` reduces SP1 v6.1.0 measured tiers to `9,500 MiB` and `12,000 MiB`.)*
 - **OpenVM (`openvm`):** Recommends **24 GiB VRAM + 32 GiB host RAM** for Halo2 outer recursion + KZG SRS and validates `extraVerifierData = abi.encode(appExeCommit, appVmCommit)` (`programId == keccak256(extraVerifierData)`).
 
 #### C. Hybrid Local Binary + Deterministic Execution (`POST /api/simulate`)
@@ -249,10 +249,10 @@ If any segment size violates this invariant (as demonstrated in Preset #3 `Segme
 
 ## 5. Smart Contract & Viem SDK Code Generator (`src/lib/code-generator.ts`)
 
-From any `/simulate` report, HemiProve Hub synthesizes two deployment-ready artifacts:
+From any `/simulate` report, HemiProve Hub synthesizes two self-contained starter artifacts:
 1. **`HemiProveJobRequester.sol` (`pragma solidity ^0.8.24`):**
-   - Implements `IHemiProveCallback.onProofFulfilled` (`msg.sender == address(HEMI_PROVE)` check).
-   - Approves `maxOffer` in `HEMI` / `tHEMI` ERC-20 escrow and populates `JobDescriptor`, `JobConfig`, `CycleVerifyConfig` (`expectedCycles = report.cycles`), and `BidConfig`.
+   - Guards `requestProof` and `withdrawEscrow` with `onlyOwner`, pulls `maxOffer` via `HEMI_TOKEN.transferFrom(msg.sender, address(this), maxOffer)`, and checks ERC-20 `approve`/`transfer`/`transferFrom` return values.
+   - Implements `IHemiProveCallback.onProofFulfilled` (`msg.sender == address(HEMI_PROVE)` check), populates `JobDescriptor`, `JobConfig`, `CycleVerifyConfig` (`expectedCycles = report.cycles`), and `BidConfig`, verifies `extraVerifierData = abi.encode(appExeCommit, appVmCommit)` for OpenVM, and emits `address(0)` + explicit require guard when Mainnet `43111` router is staged.
    - Computes the domain-separated journal predicate commitment when `expectedPublicValues` is non-empty:
      ```solidity
      keccak256(abi.encode(
@@ -262,8 +262,8 @@ From any `/simulate` report, HemiProve Hub synthesizes two deployment-ready arti
          expectedPublicValues
      ))
      ```
-2. **`submit-job.ts` (`viem` v2 SDK script):**
-   - Configures `createPublicClient` + `createWalletClient` against `hemiSepolia` (`743111`) or `hemiMainnet` (`43111`), approves ERC-20 escrow, calls `HemiProveRouter.submitJob`, and awaits the transaction receipt.
+2. **`submit-job.ts` (Standalone `viem` v2 SDK script):**
+   - Inlines `defineChain`, minimal `ERC20_ABI`, and `HEMI_PROVE_ROUTER_ABI` (`submitJob`), enforces a staged-router guard on `zeroAddress`, approves ERC-20 escrow, calls `submitJob`, and awaits the transaction receipt.
 
 ---
 
@@ -271,9 +271,9 @@ From any `/simulate` report, HemiProve Hub synthesizes two deployment-ready arti
 
 | Endpoint | Method | Query / Body | Response Summary |
 | :--- | :---: | :--- | :--- |
-| `/api/marketplace` | `GET` | `?network=sepolia\|mainnet&mode=live\|demo` | Returns `rpcConnected`, `blockscoutConnected`, `latestBlock`, `onChainJobIndex`, `totalPaidHemiOnChain`, `liveKpis`, `kpis`, `onChainJobs[]`, and `jobs[]`. (`dynamic = "force-dynamic"`) |
-| `/api/benchmarks` | `GET` | — | Returns merged + `zkOP/s`-sorted `seed-benchmarks.json` baselines and runtime community submissions. |
-| `/api/benchmarks` | `POST` | `{ rawOutput: string, overrides?: ParseBenchmarkOverrides }` | Validates `zkminer benchmark` CLI text or `--json` output and prepends to in-memory community store (capped at 50 entries; also persisted client-side in `localStorage`). |
+| `/api/marketplace` | `GET` | `?network=sepolia\|mainnet&mode=live\|demo&refresh=1` | 15s-cached (`refresh=1` bypasses) RPC + Blockscout + `ProgramRegistry` index; returns `liveKpis`, `kpis`, `onChainJobs[]`, and `jobs[]`. (`dynamic = "force-dynamic"`) |
+| `/api/benchmarks` | `GET` | — | Returns merged + `zkOP/s`-sorted `seed-benchmarks.json` baselines and deduplicated runtime community submissions. |
+| `/api/benchmarks` | `POST` | `{ rawOutput: string, overrides?: ParseBenchmarkOverrides }` | Enforces `100 KB` limit + `tdpWatts > 0`, validates `zkminer benchmark` CLI text (including blended `MzkOP/s`) or `--json` output, and stores deduplicated entries in session memory (`localStorage` client-side). |
 | `/api/hemi-price` | `GET` | — | Proxies CoinGecko `simple/price?ids=hemi` (`usd` + `usd_24h_change`) with a 60s server cache + stale-cache resilience. |
 | `/api/simulate` | `POST` | `{ elfUrl, targetZkvm, stdin, singleRun, declaredCycles?, jobId?, programId? }` | Returns `{ ok: true, report: SimulateReportJson }` including `segmentAudit[]`, `vramTierRecommendation`, `pricingRecommendation`, and `warnings[]`. |
 

@@ -221,8 +221,8 @@ export default function SimulateStudioPage() {
   const recommendedMaxCyclesCap =
     Math.ceil((totalCyclesNum * 1.2) / 1_000_000) * 1_000_000;
   const hostRamMb = Math.round(report.peakHostBytes / (1024 * 1024));
-  const hasKeccakOrEntropyWarning =
-    report.hostInput || report.sizeCheck === "differs";
+  const isCliEngine = report.executionEngine === "zkminer-cli-binary";
+  const hasConsistencyWarning = report.hostInput || report.sizeCheck === "differs";
 
   return (
     <div className="w-full bg-[#0B0B0A]">
@@ -451,8 +451,26 @@ export default function SimulateStudioPage() {
               disabled={isRunning}
               className="h-10 w-full rounded-[2px] bg-[#FF5500] font-mono text-xs font-semibold uppercase tracking-wider text-[#0B0B0A] transition-colors hover:bg-[#E04800] disabled:opacity-50"
             >
-              {isRunning ? "EXECUTING ZKMINER SIMULATE..." : "RUN ZKMINER SIMULATE ->"}
+              {isRunning ? "COMPUTING PRE-FLIGHT MODEL..." : "RUN PRE-FLIGHT ANALYSIS ->"}
             </button>
+
+            <div className="flex items-center justify-between border border-[#232320] bg-[#0B0B0A] px-2.5 py-2 text-[10px]">
+              <span className="text-[#63635E]">ACTIVE ENGINE</span>
+              {isCliEngine ? (
+                <span className="inline-flex items-center gap-1.5 font-semibold text-[#10B981]">
+                  <span aria-hidden="true">●</span>
+                  <span>ZKMINER-CLI BINARY</span>
+                </span>
+              ) : (
+                <span
+                  className="inline-flex items-center gap-1.5 text-[#FF5500]"
+                  title="Serverless preview models Protocol 12 cycles/VRAM without fetching or executing remote ELF binaries."
+                >
+                  <span aria-hidden="true">◌</span>
+                  <span>DETERMINISTIC MODEL (PREVIEW)</span>
+                </span>
+              )}
+            </div>
           </form>
 
           {/* Program Binding & Pricing Summary Datasheet */}
@@ -556,17 +574,33 @@ export default function SimulateStudioPage() {
               </div>
               <div className="mt-1 flex flex-wrap items-center justify-between gap-1 text-[10px] sm:mt-1.5">
                 <span className="text-[#9A9A94]">{report.keccakRequests} REQ</span>
-                {hasKeccakOrEntropyWarning ? (
+                {hasConsistencyWarning ? (
                   <span className="inline-flex items-center gap-1 font-medium text-[#F43F5E]">
                     <span aria-hidden="true">▲</span>
-                    <span className="sm:hidden">KECCAK WARN</span>
-                    <span className="hidden sm:inline">UNPROVABLE KECCAK WARNING</span>
+                    <span className="sm:hidden">
+                      {report.hostInput && report.keccakRequests > 0
+                        ? "KECCAK WARN"
+                        : "PO2 / ENTROPY ALERT"}
+                    </span>
+                    <span className="hidden sm:inline">
+                      {report.hostInput && report.keccakRequests > 0
+                        ? "UNPROVABLE KECCAK WARNING"
+                        : report.sizeCheck === "differs"
+                          ? "SIZECHECK DIFFERS ALERT"
+                          : "HOST ENTROPY WARNING"}
+                    </span>
                   </span>
-                ) : (
+                ) : isCliEngine ? (
                   <span className="inline-flex items-center gap-1 font-medium text-[#10B981]">
                     <span aria-hidden="true">●</span>
                     <span className="sm:hidden">VERIFIED</span>
-                    <span className="hidden sm:inline">HOST-INPUT VERIFIED</span>
+                    <span className="hidden sm:inline">CLI VERIFIED</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 font-medium text-[#9A9A94]">
+                    <span aria-hidden="true">◌</span>
+                    <span className="sm:hidden">PREVIEW</span>
+                    <span className="hidden sm:inline">DETERMINISTIC PREVIEW</span>
                   </span>
                 )}
               </div>
@@ -592,13 +626,13 @@ export default function SimulateStudioPage() {
             </div>
           )}
 
-          {/* Middle Section: 03 // RISC0-PUBLIC-V3 (PROTOCOL 12) 7-SEGMENT AUDIT MATRIX */}
+          {/* Middle Section: 04 // RISC0-PUBLIC-V3 (PROTOCOL 12) 7-SEGMENT AUDIT MATRIX */}
           <div className="border-b border-[#232320]">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#232320] bg-[#111110] px-4 py-2.5 font-mono">
               <span className="inline-flex items-center text-[11px] uppercase tracking-[0.12em] text-[#63635E]">
-                <span className="sm:hidden">03 // 7-SEGMENT AUDIT (P12)</span>
+                <span className="sm:hidden">04 // 7-SEGMENT AUDIT (P12)</span>
                 <span className="hidden sm:inline">
-                  03 // RISC0-PUBLIC-V3 (PROTOCOL 12) 7-SEGMENT AUDIT MATRIX
+                  04 // RISC0-PUBLIC-V3 (PROTOCOL 12) 7-SEGMENT AUDIT MATRIX
                 </span>
                 <InfoTip
                   label="What is the 7-Segment Audit (risc0-public-v3)?"
@@ -744,13 +778,13 @@ export default function SimulateStudioPage() {
             )}
           </div>
 
-          {/* Bottom Section: 04 // ARTIFACT & CONTRACT GENERATOR */}
+          {/* Bottom Section: 05 // ARTIFACT & CONTRACT GENERATOR */}
           <div className="flex flex-1 flex-col">
             {/* Section Title + Flush Header Tabs + Copy Button */}
             <div className="flex flex-col divide-y divide-[#232320] border-b border-[#232320] bg-[#111110] xl:flex-row xl:items-center xl:justify-between xl:divide-y-0">
               <div className="flex items-center justify-between px-4 py-2 xl:border-r xl:border-[#232320] xl:py-2.5">
                 <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
-                  04 // ARTIFACT &amp; CONTRACT GENERATOR
+                  05 // ARTIFACT &amp; CONTRACT GENERATOR
                 </span>
                 <button
                   type="button"

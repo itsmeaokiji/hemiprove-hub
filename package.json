@@ -12,17 +12,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "node --import ./scripts/register-paths.mjs --test src/lib/__tests__/hemiprove.test.ts"
   },
   "dependencies": {
     "@fontsource/inter": "^5.1.1",
     "@fontsource/jetbrains-mono": "^5.1.1",
-    "@radix-ui/react-dialog": "^1.1.6",
-    "@radix-ui/react-select": "^2.1.6",
     "@radix-ui/react-slot": "^1.1.2",
     "@radix-ui/react-switch": "^1.1.3",
-    "@radix-ui/react-tabs": "^1.1.3",
-    "@radix-ui/react-tooltip": "^1.1.8",
     "@tanstack/react-query": "^5.66.9",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -30,11 +27,9 @@
     "next": "^15.2.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "recharts": "^2.15.1",
     "tailwind-merge": "^3.0.2",
     "tailwindcss-animate": "^1.0.7",
-    "viem": "^2.23.5",
-    "wagmi": "^2.14.12"
+    "viem": "^2.23.5"
   },
   "devDependencies": {
     "@types/node": "^22.13.5",

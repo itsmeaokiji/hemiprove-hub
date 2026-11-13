@@ -2,23 +2,11 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createConfig, http, WagmiProvider } from "wagmi";
 import {
   HEMIPROVE_DEPLOYMENTS,
-  hemiMainnet,
-  hemiSepolia,
   type HemiNetworkKey,
   type HemiProveDeployment,
 } from "@/lib/hemi-chain";
-
-export const wagmiConfig = createConfig({
-  chains: [hemiSepolia, hemiMainnet],
-  transports: {
-    [hemiSepolia.id]: http(hemiSepolia.rpcUrls.default.http[0]),
-    [hemiMainnet.id]: http(hemiMainnet.rpcUrls.default.http[0]),
-  },
-  ssr: true,
-});
 
 interface HemiNetworkContextValue {
   networkKey: HemiNetworkKey;
@@ -28,6 +16,7 @@ interface HemiNetworkContextValue {
   setLiveStreamEnabled: (enabled: boolean) => void;
   guideDismissed: boolean;
   setGuideDismissed: (dismissed: boolean) => void;
+  hasHydrated: boolean;
 }
 
 const HemiNetworkContext = createContext<HemiNetworkContextValue | undefined>(undefined);
@@ -50,8 +39,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   const [networkKey, setNetworkKeyState] = useState<HemiNetworkKey>("sepolia");
+  // Default to DATA: DEMO stream on initial showcase boot; persisted across sessions in localStorage
   const [liveStreamEnabled, setLiveStreamState] = useState<boolean>(true);
   const [guideDismissed, setGuideDismissedState] = useState<boolean>(false);
+  const [hasHydrated, setHasHydrated] = useState<boolean>(false);
 
   useEffect(() => {
     try {
@@ -60,8 +51,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
         setNetworkKeyState(savedNet);
       }
       const savedStream = window.localStorage.getItem(STORAGE_STREAM_KEY);
-      if (savedStream === "false") {
-        setLiveStreamState(false);
+      if (savedStream === "false" || savedStream === "true") {
+        setLiveStreamState(savedStream === "true");
       }
       const savedGuide = window.localStorage.getItem(STORAGE_GUIDE_KEY);
       if (savedGuide === "true") {
@@ -69,6 +60,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }
     } catch {
       // ignore storage issues in restricted contexts
+    } finally {
+      setHasHydrated(true);
     }
   }, []);
 
@@ -108,18 +101,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
       setLiveStreamEnabled,
       guideDismissed,
       setGuideDismissed,
+      hasHydrated,
     }),
-    [networkKey, liveStreamEnabled, guideDismissed]
+    [networkKey, liveStreamEnabled, guideDismissed, hasHydrated]
   );
 
   return (
-    <WagmiProvider config={wagmiConfig}>
-      <QueryClientProvider client={queryClient}>
-        <HemiNetworkContext.Provider value={value}>
-          {children}
-        </HemiNetworkContext.Provider>
-      </QueryClientProvider>
-    </WagmiProvider>
+    <QueryClientProvider client={queryClient}>
+      <HemiNetworkContext.Provider value={value}>
+        {children}
+      </HemiNetworkContext.Provider>
+    </QueryClientProvider>
   );
 }
 

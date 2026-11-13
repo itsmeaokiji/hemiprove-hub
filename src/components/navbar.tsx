@@ -67,21 +67,24 @@ export function Navbar() {
     setLiveStreamEnabled,
     guideDismissed,
     setGuideDismissed,
+    hasHydrated,
   } = useHemiNetwork();
 
   const [copiedRouter, setCopiedRouter] = useState(false);
-  const [rpcLatencyMs, setRpcLatencyMs] = useState<number>(42);
+  const [apiLatencyMs, setApiLatencyMs] = useState<number>(42);
 
+  const modeKey = liveStreamEnabled ? "demo" : "live";
   const { data: telemetry } = useQuery<MarketplaceApiResponse>({
-    queryKey: ["marketplace", networkKey],
+    queryKey: ["marketplace", networkKey, modeKey],
     queryFn: async () => {
       const t0 = performance.now();
-      const res = await fetch(`/api/marketplace?network=${networkKey}`);
+      const res = await fetch(`/api/marketplace?network=${networkKey}&mode=${modeKey}`);
       const elapsed = Math.max(8, Math.round(performance.now() - t0));
-      setRpcLatencyMs(elapsed);
+      setApiLatencyMs(elapsed);
       if (!res.ok) throw new Error("Telemetry fetch failed");
       return res.json();
     },
+    enabled: hasHydrated,
     refetchInterval: 20_000,
   });
 
@@ -187,20 +190,23 @@ export function Navbar() {
 
           <span className="text-[#232320]">|</span>
 
-          <span className="text-[#9A9A94]">
+          <span
+            className="text-[#9A9A94]"
+            title="Full /api/marketplace round-trip latency (RPC + Blockscout + registry reads)"
+          >
             {telemetry?.latestBlock ? (
               <>
                 <span className="text-[#63635E]">HEAD:</span>{" "}
                 <span className="text-[#EDEDEC]">
                   #{Number(telemetry.latestBlock).toLocaleString()}
                 </span>{" "}
-                <span className="text-[#63635E]">({rpcLatencyMs}ms)</span>
+                <span className="text-[#63635E]">(API {apiLatencyMs}ms)</span>
               </>
             ) : (
               <>
-                <span className="text-[#63635E]">RPC:</span>{" "}
+                <span className="text-[#63635E]">API:</span>{" "}
                 <span className="text-[#EDEDEC]">
-                  {liveStreamEnabled ? `STREAM (${rpcLatencyMs}ms)` : "STANDBY"}
+                  {liveStreamEnabled ? `STREAM (${apiLatencyMs}ms)` : "STANDBY"}
                 </span>
               </>
             )}

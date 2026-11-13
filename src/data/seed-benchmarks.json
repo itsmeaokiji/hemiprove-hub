@@ -59,7 +59,7 @@
       "memory-merkle": 6.85
     },
     "verified": true,
-    "notes": "Keeps 3.45 GB Groth16 SRS resident across proofs (2.02s median warm wrap across 5 suite programs)"
+    "notes": "Keeps 3.45 GB Groth16 SRS resident across proofs (2.02s median warm wrap across 5 suite programs; chacha-mix calibrated to SP1 reference baseline)"
   },
   {
     "id": "rx-9070-xt-rocm-sp1",
@@ -121,7 +121,7 @@
       "memory-merkle": 7.95
     },
     "verified": true,
-    "notes": "Windows 11 Adrenalin + ADLX (amdadlx64.dll) slot PCIe/temp/power telemetry; 5-program Protocol 12 suite"
+    "notes": "Windows 11 Adrenalin + ADLX (amdadlx64.dll) slot PCIe/temp/power telemetry; zkop-mix measured on RISC0 with sha256/ecdsa/bigint timings reference-calibrated to RX 9070 XT baseline"
   },
   {
     "id": "rtx-5080-cuda-sp1",

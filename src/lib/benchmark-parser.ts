@@ -14,12 +14,62 @@ export type BenchmarkZkVm = "sp1" | "risc0";
 export const ZKOP_MIX_ITERATIONS = 3202;
 export const ZKOP_MIX_WARMUP_ITERATIONS = 200;
 export const ZKOP_MIX_SP1_CYCLES = 50_007_139;
+/** Forward-compatible blended scoring constant from `hemilabs/zk-miner` (`max/splash-progress-bars`). */
+export const ZKOP_SP1_PER_RISC0 = 3.71;
 
 export function zkopsFromStarkSecs(starkSecs: number): number {
   if (Number.isFinite(starkSecs) && starkSecs > 0) {
     return Math.round(ZKOP_MIX_SP1_CYCLES / starkSecs);
   }
   return 0;
+}
+
+export function computeBlendedZkops(sp1Zkops: number, risc0Zkops: number): number {
+  if (
+    Number.isFinite(sp1Zkops) &&
+    Number.isFinite(risc0Zkops) &&
+    sp1Zkops > 0 &&
+    risc0Zkops > 0
+  ) {
+    return Math.round(Math.sqrt(sp1Zkops * (risc0Zkops * ZKOP_SP1_PER_RISC0)));
+  }
+  return 0;
+}
+
+function deterministicFingerprint(signature: string): string {
+  let h1 = 0x811c9dc5;
+  let h2 = 0x9e3779b9;
+  for (let i = 0; i < signature.length; i++) {
+    const code = signature.charCodeAt(i);
+    h1 ^= code;
+    h1 = Math.imul(h1, 0x01000193);
+    h2 ^= code + ((i << 3) & 0xff);
+    h2 = Math.imul(h2, 0x85ebca6b);
+  }
+  return `${(h1 >>> 0).toString(16).padStart(8, "0")}${(h2 >>> 0)
+    .toString(16)
+    .padStart(8, "0")}`;
+}
+
+function buildCommunityEntryId(
+  format: "json" | "cli",
+  parts: Array<string | number | undefined>
+): string {
+  return `community-${format}-${deterministicFingerprint(parts.join("|"))}`;
+}
+
+function normalizePositiveInt(value: number | undefined, max = 10_000): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return Math.min(max, Math.round(value));
+  }
+  return undefined;
+}
+
+function parsePlainCountToken(token: string): number | null {
+  const cleaned = token.replace(/,/g, "").trim();
+  if (!/^\d+$/.test(cleaned)) return null;
+  const val = Number(cleaned);
+  return Number.isFinite(val) && val > 0 ? val : null;
 }
 
 export interface WorkloadTimings {
@@ -258,14 +308,23 @@ export function parseZkMinerBenchmark(
 
         let avgRate = 0;
         let rateSamples = 0;
+        let resultsCyclesSum = 0;
+        let resultsStarkSecsSum = 0;
 
         for (const r of results) {
           const prog = String(r.program_name ?? r.program ?? "").toLowerCase();
           const starkSecs = extractDurationSecsFromResult(r);
+          const cycles = typeof r.cycles === "number" && r.cycles > 0 ? r.cycles : 0;
           const rate = Number(r.throughput ?? r.cycle_rate ?? 0);
-          if (rate > 0 && prog !== "zkop-mix") {
-            avgRate += rate;
-            rateSamples += 1;
+          if (prog !== "zkop-mix") {
+            if (cycles > 0 && starkSecs > 0) {
+              resultsCyclesSum += cycles;
+              resultsStarkSecsSum += starkSecs;
+            }
+            if (rate > 0) {
+              avgRate += rate;
+              rateSamples += 1;
+            }
           }
           if (starkSecs > 0 && prog in workloads) {
             workloads[prog as keyof WorkloadTimings] = Number(starkSecs.toFixed(2));
@@ -307,9 +366,16 @@ export function parseZkMinerBenchmark(
           stageZkopMixSecs > 0 ||
           results.some((r) => String(r.program_name ?? r.program ?? "") === "zkop-mix");
 
-        const zkops =
+        const rawJsonZkops =
           typeof parsed.zkops === "number" && parsed.zkops > 0
             ? Math.round(parsed.zkops)
+            : typeof parsed.mzkops === "number" && parsed.mzkops > 0
+              ? Math.round(parsed.mzkops * 1_000_000)
+              : 0;
+
+        const zkops =
+          rawJsonZkops > 0
+            ? rawJsonZkops
             : stageZkopMixSecs > 0
               ? zkopsFromStarkSecs(stageZkopMixSecs)
               : hasExplicitZkopMix && workloads["zkop-mix"] > 0
@@ -328,11 +394,13 @@ export function parseZkMinerBenchmark(
           workloads["zkop-mix"] = Number((ZKOP_MIX_SP1_CYCLES / zkops).toFixed(2));
         }
 
-        // Cycle-weighted STARK rate (`DeviceBenchmark::stark_rate`) or fallback to `throughput`
+        // Cycle-weighted STARK rate (`DeviceBenchmark::stark_rate`) or fallback to `results` cycle sum / `throughput`
         const weightedStarkRate =
           pricedCyclesSum > 0 && pricedStarkSecsSum > 0
             ? Math.round(pricedCyclesSum / pricedStarkSecsSum)
-            : 0;
+            : resultsCyclesSum > 0 && resultsStarkSecsSum > 0
+              ? Math.round(resultsCyclesSum / resultsStarkSecsSum)
+              : 0;
 
         const devThroughput = Number(dev0.throughput ?? dev0.cycle_rate ?? 0);
         const starkRate =
@@ -358,8 +426,9 @@ export function parseZkMinerBenchmark(
         const peakMemBytes = Number(
           dev0.memory_usage_bytes ?? dev0.peak_memory_bytes ?? 0
         );
+        const overrideVramGb = normalizePositiveInt(overrides.vramGb, 512);
         const vramGb =
-          overrides.vramGb ??
+          overrideVramGb ??
           (peakMemBytes > 24 * 1024 ** 3
             ? 32
             : peakMemBytes > 16 * 1024 ** 3
@@ -369,8 +438,9 @@ export function parseZkMinerBenchmark(
                 : 16);
 
         const devPowerWatts = Number(dev0.power_watts ?? parsed.gpu_power_watts ?? 0);
+        const overrideTdpWatts = normalizePositiveInt(overrides.tdpWatts, 2_000);
         const tdpWatts =
-          overrides.tdpWatts ?? (devPowerWatts > 0 ? Math.round(devPowerWatts) : 250);
+          overrideTdpWatts ?? (devPowerWatts > 0 ? Math.round(devPowerWatts) : 250);
 
         const pciBusId =
           typeof dev0.pci_bus_id === "string" && dev0.pci_bus_id.trim()
@@ -388,8 +458,24 @@ export function parseZkMinerBenchmark(
               ? (hostPeaksMap[zkvm] as number)
               : undefined;
 
+        const entryId = buildCommunityEntryId("json", [
+          rawDeviceLabel,
+          vendor,
+          os,
+          zkvm,
+          optimalPo2,
+          vramGb,
+          tdpWatts,
+          zkops,
+          starkRate,
+          groth16WrapSecs,
+          workloads["sha256-chain"],
+          workloads["chacha-mix"],
+          overrides.submittedBy?.trim() || "Community Prover",
+        ]);
+
         const entry: BenchmarkEntry = {
-          id: `community-${Date.now()}`,
+          id: entryId,
           model: rawDeviceLabel,
           shortModel: inferShortModel(rawDeviceLabel),
           vendor,
@@ -441,12 +527,18 @@ export function parseZkMinerBenchmark(
   let detectedDeviceName: string | null = null;
   let detectedBackend: BenchmarkZkVm | null = null;
   let detectedPo2 = 20;
-  let detectedStarkRate: number | null = null;
+  let footerStarkRate: number | null = null;
+  let tableStarkRate: number | null = null;
   let detectedGroth16Secs: number | null = null;
   let detectedPowerWatts: number | null = null;
   let detectedPcieLink: string | null = null;
+  let detectedBlendedNote: string | null = null;
 
   const parsedWorkloads: Partial<WorkloadTimings> = {};
+  const cliSuiteMetrics = new Map<
+    string,
+    { cycles?: number; starkSecs?: number; rate?: number }
+  >();
   const workloadNames = [
     "zkop-mix",
     "sha256-chain",
@@ -459,8 +551,41 @@ export function parseZkMinerBenchmark(
   for (const line of lines) {
     // Match `zkOP/s: 2793695  (SP1 cycles per second on a 50M-cycle program, all GPUs)`
     const zkopsMatch = line.match(/zkOP\/s\s*:\s*([\d,]+(?:\.\d+)?)/i);
-    if (zkopsMatch) {
+    if (zkopsMatch && !/MzkOP\/s/i.test(line)) {
       zkops = Math.round(parseFloat(zkopsMatch[1].replace(/,/g, "")));
+      continue;
+    }
+
+    // Match upcoming `max/splash-progress-bars` blended per-device line:
+    // e.g. `GPU0 AMD Radeon RX 9070 XT: 2.18 MzkOP/s (sp1: 2.76M, risc0: 1.72M)`
+    const blendedDeviceMatch = line.match(
+      /^(?:GPU\d+\s+)?([^:/]+?):\s*([\d,]+(?:\.\d+)?)\s*MzkOP\/s(?:\s*\(([^)]+)\))?$/i
+    );
+    if (blendedDeviceMatch && !/all GPUs/i.test(blendedDeviceMatch[1])) {
+      detectedDeviceName = stripGpuOrdinalPrefix(blendedDeviceMatch[1]);
+      const cardScore = Math.round(
+        parseFloat(blendedDeviceMatch[2].replace(/,/g, "")) * 1_000_000
+      );
+      if (!zkops && cardScore > 0) zkops = cardScore;
+      if (blendedDeviceMatch[3]) {
+        detectedBlendedNote = `Blended dual-zkVM score (${blendedDeviceMatch[3]})`;
+      }
+      continue;
+    }
+
+    // Match upcoming `max/splash-progress-bars` total line:
+    // `2.18 MzkOP/s (all GPUs: each GPU's SP1 and RISC Zero scores blended, added up)`
+    const blendedTotalMatch = line.match(
+      /([\d,]+(?:\.\d+)?)\s*MzkOP\/s/i
+    );
+    if (blendedTotalMatch) {
+      const totalScore = Math.round(
+        parseFloat(blendedTotalMatch[1].replace(/,/g, "")) * 1_000_000
+      );
+      if (totalScore > 0) {
+        zkops = totalScore;
+        detectedBlendedNote ??= "Blended dual-zkVM MzkOP/s output";
+      }
       continue;
     }
 
@@ -484,14 +609,15 @@ export function parseZkMinerBenchmark(
     if (stageFooterMatch) {
       detectedGroth16Secs = parseFloat(stageFooterMatch[1]);
       const weightedRate = parseCycleRateToken(stageFooterMatch[2]);
-      if (weightedRate) detectedStarkRate = weightedRate;
+      if (weightedRate) footerStarkRate = weightedRate;
       continue;
     }
 
     // Match GPU power e.g. `GPU power: 285 W` or TUI telemetry `Power 285W ... PCIe Gen5 x8`
     const powerMatch = line.match(/(?:power\s*:?\s*)(\d+)\s*W/i);
     if (powerMatch) {
-      detectedPowerWatts = parseInt(powerMatch[1], 10);
+      const parsedPower = parseInt(powerMatch[1], 10);
+      if (parsedPower > 0) detectedPowerWatts = parsedPower;
     }
     const pcieMatch = line.match(/PCIe\s+(Gen\d+\s*x\d+)/i);
     if (pcieMatch) {
@@ -502,30 +628,39 @@ export function parseZkMinerBenchmark(
     for (const wName of workloadNames) {
       if (line.toLowerCase().startsWith(wName)) {
         const cols = line.split(/\s{2,}|\t+/).map((c) => c.trim()).filter(Boolean);
+        const existing = cliSuiteMetrics.get(wName) ?? {};
         if (cols.length >= 6) {
           // Top table: Program | Backend | Precompile | Weight | Cycles | STARK | STARK rate
           const backendCol = cols[1].toLowerCase();
           if (!detectedBackend && (backendCol.includes("risc") || backendCol.includes("sp1"))) {
             detectedBackend = backendCol.includes("risc") ? "risc0" : "sp1";
           }
+          const cyclesCandidate = parsePlainCountToken(cols[4]);
           const timeCandidate = parseDurationToken(cols[5]) ?? parseDurationToken(cols[4]);
           if (timeCandidate !== null && timeCandidate > 0) {
             parsedWorkloads[wName] = timeCandidate;
+            existing.starkSecs = timeCandidate;
+          }
+          if (cyclesCandidate) {
+            existing.cycles = cyclesCandidate;
           }
           const rateCandidate = cols[6] ? parseCycleRateToken(cols[6]) : null;
-          if (rateCandidate && wName !== "zkop-mix") {
-            detectedStarkRate = rateCandidate;
-          }
+          if (rateCandidate) existing.rate = rateCandidate;
+          if (wName !== "zkop-mix") cliSuiteMetrics.set(wName, existing);
         } else if (cols.length >= 4) {
           // Proving stages table: Program | Cycles | STARK | STARK rate | Groth16
+          const cyclesCandidate = parsePlainCountToken(cols[1]);
           const timeCandidate = parseDurationToken(cols[2]);
           if (timeCandidate !== null && timeCandidate > 0) {
             parsedWorkloads[wName] = timeCandidate;
+            existing.starkSecs = timeCandidate;
+          }
+          if (cyclesCandidate) {
+            existing.cycles = cyclesCandidate;
           }
           const rateCandidate = parseCycleRateToken(cols[3]);
-          if (rateCandidate && wName !== "zkop-mix") {
-            detectedStarkRate = rateCandidate;
-          }
+          if (rateCandidate) existing.rate = rateCandidate;
+          if (wName !== "zkop-mix") cliSuiteMetrics.set(wName, existing);
           if (cols[4]) {
             const wrapCandidate = parseDurationToken(cols[4]);
             if (wrapCandidate !== null && wrapCandidate > 0) {
@@ -536,9 +671,13 @@ export function parseZkMinerBenchmark(
           const simpleTime = line.match(/(\d+(?:\.\d+)?(?:ms|s))\s+([\d.]+\s*[MK]?\s*c\/s)/i);
           if (simpleTime) {
             const t = parseDurationToken(simpleTime[1]);
-            if (t) parsedWorkloads[wName] = t;
+            if (t) {
+              parsedWorkloads[wName] = t;
+              existing.starkSecs = t;
+            }
             const r = parseCycleRateToken(simpleTime[2]);
-            if (r && wName !== "zkop-mix") detectedStarkRate = r;
+            if (r) existing.rate = r;
+            if (wName !== "zkop-mix") cliSuiteMetrics.set(wName, existing);
           }
         }
       }
@@ -564,7 +703,7 @@ export function parseZkMinerBenchmark(
         for (const col of cols.slice(3)) {
           if (col.includes("c/s")) {
             const r = parseCycleRateToken(col);
-            if (r) detectedStarkRate = r;
+            if (r) tableStarkRate = r;
           } else if (/^\d+(\.\d+)?s$/i.test(col)) {
             const g = parseDurationToken(col);
             if (g) detectedGroth16Secs = g;
@@ -574,6 +713,30 @@ export function parseZkMinerBenchmark(
     }
   }
 
+  let cliCyclesSum = 0;
+  let cliStarkSecsSum = 0;
+  let cliRateSum = 0;
+  let cliRateCount = 0;
+  for (const metrics of cliSuiteMetrics.values()) {
+    if (metrics.cycles && metrics.starkSecs && metrics.cycles > 0 && metrics.starkSecs > 0) {
+      cliCyclesSum += metrics.cycles;
+      cliStarkSecsSum += metrics.starkSecs;
+    }
+    if (metrics.rate && metrics.rate > 0) {
+      cliRateSum += metrics.rate;
+      cliRateCount += 1;
+    }
+  }
+
+  const cycleWeightedCliRate =
+    cliCyclesSum > 0 && cliStarkSecsSum > 0
+      ? Math.round(cliCyclesSum / cliStarkSecsSum)
+      : cliRateCount > 0
+        ? Math.round(cliRateSum / cliRateCount)
+        : null;
+
+  const detectedStarkRate = footerStarkRate ?? cycleWeightedCliRate ?? tableStarkRate;
+
   if (!zkops && parsedWorkloads["zkop-mix"] && parsedWorkloads["zkop-mix"] > 0) {
     zkops = zkopsFromStarkSecs(parsedWorkloads["zkop-mix"]);
   }
@@ -582,7 +745,7 @@ export function parseZkMinerBenchmark(
     return {
       ok: false,
       error:
-        "Could not find `zkOP/s: <score>` or `zkop-mix` timing in CLI output. Paste output from `zkminer benchmark` or `zkminer benchmark --json`.",
+        "Could not find `zkOP/s: <score>`, `MzkOP/s`, or `zkop-mix` timing in CLI output. Paste output from `zkminer benchmark` or `zkminer benchmark --json`.",
     };
   }
 
@@ -608,30 +771,54 @@ export function parseZkMinerBenchmark(
       parsedWorkloads["memory-merkle"] ?? Number((zkopMixSecs * 0.39).toFixed(2)),
   };
 
+  const finalVramGb = normalizePositiveInt(overrides.vramGb, 512) ?? 16;
+  const finalTdpWatts =
+    normalizePositiveInt(overrides.tdpWatts, 2_000) ?? detectedPowerWatts ?? 260;
+  const finalStarkRate = detectedStarkRate ?? zkops;
+  const finalGroth16Secs = detectedGroth16Secs ?? 3.2;
+
+  const entryId = buildCommunityEntryId("cli", [
+    finalModel,
+    vendor,
+    os,
+    zkvm,
+    detectedPo2,
+    finalVramGb,
+    finalTdpWatts,
+    zkops,
+    finalStarkRate,
+    finalGroth16Secs,
+    workloads["sha256-chain"],
+    workloads["chacha-mix"],
+    overrides.submittedBy?.trim() || "Community Prover",
+  ]);
+
   const entry: BenchmarkEntry = {
-    id: `community-cli-${Date.now()}`,
+    id: entryId,
     model: finalModel,
     shortModel: inferShortModel(finalModel),
     vendor,
     computeStack: inferDefaultComputeStack(vendor, os),
     arch: "Community Verified CLI",
-    vramGb: overrides.vramGb ?? 16,
+    vramGb: finalVramGb,
     os,
     osDetail: `${os} / zkminer CLI (Protocol 12)`,
     zkvm,
     optimalPo2: detectedPo2,
-    tdpWatts: overrides.tdpWatts ?? detectedPowerWatts ?? 260,
+    tdpWatts: finalTdpWatts,
     msrpUsd: 699,
     zkops,
-    starkRateCyclesPerSec: detectedStarkRate ?? zkops,
-    groth16WrapSecs: detectedGroth16Secs ?? 3.2,
+    starkRateCyclesPerSec: finalStarkRate,
+    groth16WrapSecs: finalGroth16Secs,
     workloads,
     pcieLink: detectedPcieLink ?? undefined,
     telemetrySource: inferTelemetrySource(vendor, os),
     verified: false,
     submittedBy: overrides.submittedBy || "Community Prover",
     submittedAtIso: new Date().toISOString(),
-    notes: "Parsed from `zkminer benchmark` CLI output (5-program suite + self-scored zkOP/s)",
+    notes: detectedBlendedNote
+      ? `Parsed from \`zkminer benchmark\` CLI output — ${detectedBlendedNote}`
+      : "Parsed from `zkminer benchmark` CLI output (5-program suite + self-scored zkOP/s)",
   };
 
   return { ok: true, entry, detectedFormat: "cli" };

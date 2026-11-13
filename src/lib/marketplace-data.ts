@@ -334,6 +334,61 @@ export function buildBaselineJobs(
   });
 }
 
+function summarizeJobsMetrics(jobs: MarketplaceJob[]) {
+  const activeAuctions = jobs.filter((j) => j.status === "Open").length;
+  const proofsVerified = jobs.filter((j) => j.status === "Verified").length;
+  const proverSet = new Set(
+    jobs
+      .map((j) => j.proverAddress?.toLowerCase())
+      .filter((addr): addr is string => Boolean(addr))
+  );
+
+  const n = jobs.length;
+  const r0Count = jobs.filter((j) => j.zkvm === "risc0").length;
+  const sp1Count = jobs.filter((j) => j.zkvm === "sp1").length;
+  const ovmCount = jobs.filter((j) => j.zkvm === "openvm").length;
+  const multiProofCount = jobs.filter((j) => Boolean(j.multiProofGroup)).length;
+
+  let risc0Pct = 0;
+  let sp1Pct = 0;
+  let openvmPct = 0;
+
+  if (n > 0) {
+    risc0Pct = Math.round((r0Count / n) * 100);
+    sp1Pct = Math.round((sp1Count / n) * 100);
+    openvmPct = ovmCount > 0 ? Math.max(0, 100 - risc0Pct - sp1Pct) : 0;
+    if (ovmCount === 0 && risc0Pct + sp1Pct !== 100) {
+      if (r0Count >= sp1Count) risc0Pct = 100 - sp1Pct;
+      else sp1Pct = 100 - risc0Pct;
+    }
+  }
+
+  const settlementSamples = jobs
+    .map((j) => j.settlementSecs)
+    .filter((s): s is number => typeof s === "number" && Number.isFinite(s) && s > 0);
+  const avgSettlementSecs =
+    settlementSamples.length > 0
+      ? Number(
+          (
+            settlementSamples.reduce((acc, s) => acc + s, 0) / settlementSamples.length
+          ).toFixed(1)
+        )
+      : 0;
+
+  return {
+    activeAuctions,
+    proofsVerified,
+    activeProvers: proverSet.size,
+    avgSettlementSecs,
+    diversitySplit: {
+      risc0: risc0Pct,
+      sp1: sp1Pct,
+      openvm: openvmPct,
+      multiProofBundles: n > 0 ? Math.round((multiProofCount / n) * 100) : 0,
+    },
+  };
+}
+
 /**
  * Strictly real on-chain KPIs for `DATA: LIVE` mode (zero mocked counts).
  */
@@ -360,88 +415,39 @@ export function buildLiveKpis(
     };
   }
 
-  const totalJobs = onChainJobIndex ?? onChainJobs.length;
-  const activeAuctions = onChainJobs.filter((j) => j.status === "Open").length;
-  const proofsVerified = onChainJobs.filter((j) => j.status === "Verified").length;
-  const proverSet = new Set(
-    onChainJobs
-      .map((j) => j.proverAddress?.toLowerCase())
-      .filter((addr): addr is string => Boolean(addr))
-  );
-
-  const n = onChainJobs.length;
-  const r0Count = onChainJobs.filter((j) => j.zkvm === "risc0").length;
-  const sp1Count = onChainJobs.filter((j) => j.zkvm === "sp1").length;
-  const ovmCount = onChainJobs.filter((j) => j.zkvm === "openvm").length;
-
-  let risc0Pct = 0;
-  let sp1Pct = 0;
-  let openvmPct = 0;
-
-  if (n > 0) {
-    risc0Pct = Math.round((r0Count / n) * 100);
-    sp1Pct = Math.round((sp1Count / n) * 100);
-    openvmPct = ovmCount > 0 ? Math.max(0, 100 - risc0Pct - sp1Pct) : 0;
-    if (ovmCount === 0 && risc0Pct + sp1Pct !== 100) {
-      if (r0Count >= sp1Count) risc0Pct = 100 - sp1Pct;
-      else sp1Pct = 100 - risc0Pct;
-    }
-  }
+  const summary = summarizeJobsMetrics(onChainJobs);
 
   return {
-    totalJobs,
-    activeAuctions,
-    proofsVerified,
-    avgSettlementSecs: 0,
-    activeProvers: proverSet.size,
+    totalJobs: onChainJobIndex ?? onChainJobs.length,
+    activeAuctions: summary.activeAuctions,
+    proofsVerified: summary.proofsVerified,
+    avgSettlementSecs: summary.avgSettlementSecs,
+    activeProvers: summary.activeProvers,
     totalPaidHemi: Number((totalPaidHemiOnChain ?? 0).toFixed(4)),
-    diversitySplit: {
-      risc0: risc0Pct,
-      sp1: sp1Pct,
-      openvm: openvmPct,
-      multiProofBundles: 0,
-    },
+    diversitySplit: summary.diversitySplit,
   };
 }
 
+/**
+ * Computes consistent KPI totals for `DATA: DEMO` directly from the demo/merged jobs slice.
+ */
 export function buildBaselineKpis(
-  network: HemiNetworkKey,
-  onChainJobIndex: number | null,
+  _network: HemiNetworkKey,
+  demoJobs: MarketplaceJob[],
   totalPaidHemiOnChain: number | null
 ): MarketplaceKpis {
-  if (network === "sepolia") {
-    const totalJobs = onChainJobIndex && onChainJobIndex > 0 ? onChainJobIndex : 1428;
-    return {
-      totalJobs,
-      activeAuctions: 11,
-      proofsVerified: Math.max(1, Math.floor(totalJobs * 0.94)),
-      avgSettlementSecs: 31.4,
-      activeProvers: 38,
-      totalPaidHemi:
-        totalPaidHemiOnChain && totalPaidHemiOnChain > 0 ? totalPaidHemiOnChain : 18_420.5,
-      diversitySplit: {
-        risc0: 44,
-        sp1: 39,
-        openvm: 17,
-        multiProofBundles: 29,
-      },
-    };
-  }
+  const summary = summarizeJobsMetrics(demoJobs);
+  const simulatedSettledSum = demoJobs
+    .filter((j) => j.isSimulatedStream && j.status === "Verified")
+    .reduce((acc, j) => acc + (j.settledPriceHemi ?? 0), 0);
 
-  const totalJobs = onChainJobIndex && onChainJobIndex > 0 ? onChainJobIndex : 8948;
   return {
-    totalJobs,
-    activeAuctions: 19,
-    proofsVerified: Math.max(1, Math.floor(totalJobs * 0.968)),
-    avgSettlementSecs: 26.9,
-    activeProvers: 84,
-    totalPaidHemi:
-      totalPaidHemiOnChain && totalPaidHemiOnChain > 0 ? totalPaidHemiOnChain : 142_890.0,
-    diversitySplit: {
-      risc0: 42,
-      sp1: 41,
-      openvm: 17,
-      multiProofBundles: 34,
-    },
+    totalJobs: demoJobs.length,
+    activeAuctions: summary.activeAuctions,
+    proofsVerified: summary.proofsVerified,
+    avgSettlementSecs: summary.avgSettlementSecs,
+    activeProvers: summary.activeProvers,
+    totalPaidHemi: Number(((totalPaidHemiOnChain ?? 0) + simulatedSettledSum).toFixed(2)),
+    diversitySplit: summary.diversitySplit,
   };
 }

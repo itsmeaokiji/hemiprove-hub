@@ -31,6 +31,18 @@ const ZERO_BYTES32 =
   "0x0000000000000000000000000000000000000000000000000000000000000000";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
+const MARKETPLACE_CACHE_TTL_MS = 15_000;
+const MAX_CANDIDATE_SCAN = 36;
+const TARGET_VALID_ONCHAIN_JOBS = 12;
+const ENRICH_BATCH_SIZE = 12;
+
+interface CachedMarketplaceEntry {
+  expiresAtMs: number;
+  payload: MarketplaceApiResponse;
+}
+
+const marketplaceCache = new Map<string, CachedMarketplaceEntry>();
+
 interface RawSubmittedCandidate {
   jobId: Hex;
   proofSystemId: Hex;
@@ -39,6 +51,7 @@ interface RawSubmittedCandidate {
   minPrice?: bigint;
   maxPrice?: bigint;
   txHash?: string;
+  blockTimestamp?: string;
 }
 
 interface ResolvedProgramMeta {
@@ -54,6 +67,7 @@ interface BlockscoutLogItem {
   topics?: Array<string | null>;
   transaction_hash?: string;
   tx_hash?: string;
+  block_timestamp?: string;
 }
 
 function mapStorageType(storageType: number, uri: string): ElfSourceType {
@@ -66,9 +80,27 @@ function mapStorageType(storageType: number, uri: string): ElfSourceType {
 export async function GET(request: NextRequest) {
   const networkParam = request.nextUrl.searchParams.get("network");
   const modeParam = request.nextUrl.searchParams.get("mode");
+  const forceRefresh = request.nextUrl.searchParams.get("refresh") === "1";
+
   const network: HemiNetworkKey = networkParam === "mainnet" ? "mainnet" : "sepolia";
+  const mode = modeParam === "live" ? "live" : "demo";
+  const cacheKey = `${network}:${mode}`;
+  const nowMs = Date.now();
+
+  if (!forceRefresh) {
+    const cached = marketplaceCache.get(cacheKey);
+    if (cached && cached.expiresAtMs > nowMs) {
+      return NextResponse.json(cached.payload, {
+        headers: {
+          "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30",
+        },
+      });
+    }
+  }
+
   const deployment = HEMIPROVE_DEPLOYMENTS[network];
   const chain = network === "mainnet" ? hemiMainnet : hemiSepolia;
+  const snapshotIso = new Date(nowMs).toISOString();
 
   let rpcConnected = false;
   let blockscoutConnected = false;
@@ -123,7 +155,7 @@ export async function GET(request: NextRequest) {
         totalPaidHemi = Number(formatUnits(paidRes.value, 18));
       }
 
-      // 1. Fast RPC scan over the latest 2,000 blocks
+      // 1. Fast RPC scan over the latest 2,000 blocks (retain up to MAX_CANDIDATE_SCAN past cancelled bursts)
       const lookbackWindow = BigInt(2_000);
       const windowStart =
         headBlock > lookbackWindow ? headBlock - lookbackWindow : BigInt(0);
@@ -142,7 +174,7 @@ export async function GET(request: NextRequest) {
           })
           .catch(() => []);
 
-        const recentRpcLogs = submittedLogs.slice(-12).reverse();
+        const recentRpcLogs = submittedLogs.slice(-MAX_CANDIDATE_SCAN).reverse();
         for (const log of recentRpcLogs) {
           const args = log.args;
           if (!args.jobId || !args.proofSystemId || !args.caller) continue;
@@ -165,8 +197,8 @@ export async function GET(request: NextRequest) {
     rpcConnected = false;
   }
 
-  // 2. Historical Blockscout v2 `/logs` discovery when the 2,000-block RPC window had few or zero logs
-  if (deployment.router && rawCandidates.length < 5) {
+  // 2. Historical Blockscout v2 `/logs` discovery when the 2,000-block RPC window has limited logs
+  if (deployment.router && rawCandidates.length < TARGET_VALID_ONCHAIN_JOBS) {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 4_500);
@@ -182,7 +214,7 @@ export async function GET(request: NextRequest) {
         const items = Array.isArray(json?.items) ? json.items : [];
 
         for (const item of items) {
-          if (rawCandidates.length >= 12) break;
+          if (rawCandidates.length >= MAX_CANDIDATE_SCAN) break;
           if (!item.data || !item.data.startsWith("0x") || !Array.isArray(item.topics)) {
             continue;
           }
@@ -221,6 +253,7 @@ export async function GET(request: NextRequest) {
                 minPrice: args.minPrice,
                 maxPrice: args.maxPrice,
                 txHash: item.transaction_hash ?? item.tx_hash,
+                blockTimestamp: item.block_timestamp,
               });
             }
           } catch {
@@ -233,7 +266,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 3. Enrich discovered on-chain jobs via ProgramRegistry + HemiProveRouter.getJobStatusView
+  // 3. Enrich discovered candidates in ordered batches, scanning past Cancelled/None jobs
   if (deployment.router && rawCandidates.length > 0) {
     const routerAddr = deployment.router;
     const programMetaMap = new Map<string, ResolvedProgramMeta>();
@@ -299,120 +332,133 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const enrichedList = await Promise.all(
-      rawCandidates.slice(0, 12).map(async (cand, idx) => {
-        const psSpec = resolveProofSystemById(cand.proofSystemId);
-        const minPriceHemi = cand.minPrice
-          ? Number(formatUnits(cand.minPrice, 18))
-          : 1.0;
-        const maxPriceHemi = cand.maxPrice
-          ? Number(formatUnits(cand.maxPrice, 18))
-          : Math.max(minPriceHemi * 2, 10.0);
+    for (
+      let offset = 0;
+      offset < rawCandidates.length && onChainJobs.length < TARGET_VALID_ONCHAIN_JOBS;
+      offset += ENRICH_BATCH_SIZE
+    ) {
+      const batch = rawCandidates.slice(offset, offset + ENRICH_BATCH_SIZE);
+      const enrichedBatch = await Promise.all(
+        batch.map(async (cand, batchIdx) => {
+          const globalIdx = offset + batchIdx;
+          const psSpec = resolveProofSystemById(cand.proofSystemId);
+          const minPriceHemi = cand.minPrice
+            ? Number(formatUnits(cand.minPrice, 18))
+            : 1.0;
+          const maxPriceHemi = cand.maxPrice
+            ? Number(formatUnits(cand.maxPrice, 18))
+            : Math.max(minPriceHemi * 2, 10.0);
 
-        let statusLabel: MarketplaceJob["status"] = "Open";
-        let currentOfferHemi = minPriceHemi;
-        let settledPriceHemi: number | undefined;
-        let proverAddr: string | null = null;
-        let rampUpSecs = 300;
-        let elapsedSecs = 60;
-        let expectedCycles = 50_000_000;
-        let isContract = false;
+          let statusLabel: MarketplaceJob["status"] = "Open";
+          let currentOfferHemi = minPriceHemi;
+          let settledPriceHemi: number | undefined;
+          let proverAddr: string | null = null;
+          let rampUpSecs = 300;
+          let elapsedSecs = 60;
+          let expectedCycles = 50_000_000;
+          let isContract = false;
 
-        if (rpcConnected) {
-          const [statusViewRes, codeRes] = await Promise.allSettled([
-            client.readContract({
-              address: routerAddr,
-              abi: HEMI_PROVE_ROUTER_ABI,
-              functionName: "getJobStatusView",
-              args: [cand.jobId],
-            }),
-            client.getCode({ address: cand.caller }),
-          ]);
+          if (rpcConnected) {
+            const [statusViewRes, codeRes] = await Promise.allSettled([
+              client.readContract({
+                address: routerAddr,
+                abi: HEMI_PROVE_ROUTER_ABI,
+                functionName: "getJobStatusView",
+                args: [cand.jobId],
+              }),
+              client.getCode({ address: cand.caller }),
+            ]);
 
-          if (statusViewRes.status === "fulfilled") {
-            const view = statusViewRes.value;
-            // HemiProve JobStatus: 0 = None, 1 = Open, 2 = Claimed, 3 = Fulfilled, 4 = Cancelled
-            if (view.status === 0 || view.status === 4) {
-              return null;
+            if (statusViewRes.status === "fulfilled") {
+              const view = statusViewRes.value;
+              // HemiProve JobStatus: 0 = None, 1 = Open, 2 = Claimed, 3 = Fulfilled, 4 = Cancelled
+              if (view.status === 0 || view.status === 4) {
+                return null;
+              }
+              if (view.status === 2) statusLabel = "Claimed";
+              else if (view.status === 3) statusLabel = "Verified";
+              else statusLabel = "Open";
+
+              const auctionPrice = Number(formatUnits(view.currentAuctionPrice, 18));
+              const settled = Number(formatUnits(view.settledPrice, 18));
+              currentOfferHemi =
+                statusLabel === "Open"
+                  ? auctionPrice
+                  : settled > 0
+                    ? settled
+                    : maxPriceHemi;
+              if (settled > 0) settledPriceHemi = Number(settled.toFixed(4));
+
+              if (view.prover && view.prover.toLowerCase() !== ZERO_ADDRESS) {
+                proverAddr = view.prover;
+              }
+              rampUpSecs = Number(view.rampUpPeriod) || 300;
+              elapsedSecs = Number(view.auctionTimeElapsed) || 0;
+              if (view.expectedCycles > BigInt(0)) {
+                expectedCycles = Number(view.expectedCycles);
+              }
             }
-            if (view.status === 2) statusLabel = "Claimed";
-            else if (view.status === 3) statusLabel = "Verified";
-            else statusLabel = "Open";
 
-            const auctionPrice = Number(formatUnits(view.currentAuctionPrice, 18));
-            const settled = Number(formatUnits(view.settledPrice, 18));
-            currentOfferHemi =
-              statusLabel === "Open"
-                ? auctionPrice
-                : settled > 0
-                  ? settled
-                  : maxPriceHemi;
-            if (settled > 0) settledPriceHemi = Number(settled.toFixed(4));
-
-            if (view.prover && view.prover.toLowerCase() !== ZERO_ADDRESS) {
-              proverAddr = view.prover;
-            }
-            rampUpSecs = Number(view.rampUpPeriod) || 300;
-            elapsedSecs = Number(view.auctionTimeElapsed) || 0;
-            if (view.expectedCycles > BigInt(0)) {
-              expectedCycles = Number(view.expectedCycles);
-            }
+            isContract =
+              codeRes.status === "fulfilled" &&
+              Boolean(codeRes.value && codeRes.value !== "0x");
           }
 
-          isContract =
-            codeRes.status === "fulfilled" &&
-            Boolean(codeRes.value && codeRes.value !== "0x");
+          const progMeta = programMetaMap.get(cand.programId.toLowerCase());
+          if (expectedCycles === 50_000_000 && progMeta?.estimatedCycles) {
+            expectedCycles = progMeta.estimatedCycles;
+          }
+
+          const resolvedElfUri =
+            progMeta?.elfUri ?? `ar://program-${cand.programId.slice(2, 26)}`;
+          const resolvedElfSource =
+            progMeta?.elfSourceType ?? detectElfSource(resolvedElfUri);
+
+          const job: MarketplaceJob = {
+            jobId: cand.jobId,
+            shortNumericId: Math.max(
+              1,
+              (onChainJobIndex ?? rawCandidates.length) - globalIdx
+            ),
+            programName:
+              progMeta?.name ?? `OnChainProgram (${cand.programId.slice(0, 10)})`,
+            programFamily: progMeta?.familyLabel ?? "hemiprove.onchain.v2",
+            requester: cand.caller,
+            requesterType: isContract ? "Smart Contract" : "EOA",
+            zkvm: psSpec?.backend ?? "risc0",
+            proofSystemId: cand.proofSystemId,
+            proofSystemLabel: psSpec?.label ?? "custom.verifier",
+            elfSourceType: resolvedElfSource,
+            elfUri: resolvedElfUri,
+            programId: cand.programId,
+            minOfferHemi: Number(minPriceHemi.toFixed(4)),
+            maxOfferHemi: Number(maxPriceHemi.toFixed(4)),
+            currentOfferHemi: Number(currentOfferHemi.toFixed(4)),
+            settledPriceHemi,
+            rampUpPeriodSecs: rampUpSecs,
+            elapsedSecs,
+            curveType: 0,
+            expectedCycles,
+            status: statusLabel,
+            proverAddress: proverAddr,
+            submittedAtIso: cand.blockTimestamp ?? snapshotIso,
+            txHash: cand.txHash,
+            isSimulatedStream: false,
+          };
+
+          return job;
+        })
+      );
+
+      for (const item of enrichedBatch) {
+        if (item && onChainJobs.length < TARGET_VALID_ONCHAIN_JOBS) {
+          onChainJobs.push(item);
         }
-
-        const progMeta = programMetaMap.get(cand.programId.toLowerCase());
-        if (expectedCycles === 50_000_000 && progMeta?.estimatedCycles) {
-          expectedCycles = progMeta.estimatedCycles;
-        }
-
-        const resolvedElfUri =
-          progMeta?.elfUri ?? `ar://program-${cand.programId.slice(2, 26)}`;
-        const resolvedElfSource =
-          progMeta?.elfSourceType ?? detectElfSource(resolvedElfUri);
-
-        const job: MarketplaceJob = {
-          jobId: cand.jobId,
-          shortNumericId: Math.max(1, (onChainJobIndex ?? rawCandidates.length) - idx),
-          programName:
-            progMeta?.name ?? `OnChainProgram (${cand.programId.slice(0, 10)})`,
-          programFamily: progMeta?.familyLabel ?? "hemiprove.onchain.v2",
-          requester: cand.caller,
-          requesterType: isContract ? "Smart Contract" : "EOA",
-          zkvm: psSpec?.backend ?? "risc0",
-          proofSystemId: cand.proofSystemId,
-          proofSystemLabel: psSpec?.label ?? "custom.verifier",
-          elfSourceType: resolvedElfSource,
-          elfUri: resolvedElfUri,
-          programId: cand.programId,
-          minOfferHemi: Number(minPriceHemi.toFixed(4)),
-          maxOfferHemi: Number(maxPriceHemi.toFixed(4)),
-          currentOfferHemi: Number(currentOfferHemi.toFixed(4)),
-          settledPriceHemi,
-          rampUpPeriodSecs: rampUpSecs,
-          elapsedSecs,
-          curveType: 0,
-          expectedCycles,
-          status: statusLabel,
-          proverAddress: proverAddr,
-          submittedAtIso: new Date().toISOString(),
-          txHash: cand.txHash,
-          isSimulatedStream: false,
-        };
-
-        return job;
-      })
-    );
-
-    for (const item of enrichedList) {
-      if (item) onChainJobs.push(item);
+      }
     }
   }
 
-  const baselineJobs = buildBaselineJobs(network);
+  const baselineJobs = buildBaselineJobs(network, nowMs);
   const usingSimulatedFallback = onChainJobs.length === 0;
   const liveKpis = buildLiveKpis(
     deployment.deployed,
@@ -421,12 +467,9 @@ export async function GET(request: NextRequest) {
     onChainJobs
   );
 
-  const responseJobs =
-    modeParam === "live"
-      ? onChainJobs
-      : onChainJobs.length > 0
-        ? [...onChainJobs, ...baselineJobs]
-        : baselineJobs;
+  const demoJobs =
+    onChainJobs.length > 0 ? [...onChainJobs, ...baselineJobs] : baselineJobs;
+  const responseJobs = mode === "live" ? onChainJobs : demoJobs;
 
   const response: MarketplaceApiResponse = {
     network,
@@ -440,12 +483,23 @@ export async function GET(request: NextRequest) {
     onChainJobIndex,
     totalPaidHemiOnChain: totalPaidHemi,
     usingSimulatedFallback,
-    fetchedAtIso: new Date().toISOString(),
+    fetchedAtIso: snapshotIso,
     liveKpis,
-    kpis: buildBaselineKpis(network, onChainJobIndex, totalPaidHemi),
+    kpis: buildBaselineKpis(network, demoJobs, totalPaidHemi),
     onChainJobs,
     jobs: responseJobs,
   };
 
-  return NextResponse.json(response);
+  marketplaceCache.set(cacheKey, {
+    expiresAtMs: Date.now() + MARKETPLACE_CACHE_TTL_MS,
+    payload: response,
+  });
+
+  return NextResponse.json(response, {
+    headers: {
+      "Cache-Control": forceRefresh
+        ? "no-store"
+        : "public, s-maxage=15, stale-while-revalidate=30",
+    },
+  });
 }

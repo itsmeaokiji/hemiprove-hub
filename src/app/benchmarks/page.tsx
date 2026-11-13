@@ -20,8 +20,6 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { cn, formatCycleRate, formatZkops } from "@/lib/utils";
 
 const LOCAL_STORAGE_BENCHMARKS_KEY = "hemiprove-hub:community-benchmarks:v1";
-const COINGECKO_CLIENT_URL =
-  "https://api.coingecko.com/api/v3/simple/price?ids=hemi&vs_currencies=usd&include_24hr_change=true";
 
 type SortKey = "zkops" | "efficiency" | "chacha" | "sha256";
 type RailMode = "roi" | "submit";
@@ -93,42 +91,11 @@ export default function BenchmarksPage() {
   } = useQuery<HemiPriceApiResponse>({
     queryKey: ["hemi-price"],
     queryFn: async () => {
-      try {
-        const res = await fetch("/api/hemi-price");
-        if (res.ok) {
-          const payload = (await res.json()) as HemiPriceApiResponse;
-          if (payload.live && payload.usd > 0) {
-            return payload;
-          }
-        }
-      } catch {
-        // Fall through to direct browser CoinGecko request
+      const res = await fetch("/api/hemi-price");
+      if (!res.ok) {
+        throw new Error("HEMI price service unavailable");
       }
-
-      const directRes = await fetch(COINGECKO_CLIENT_URL, {
-        headers: { Accept: "application/json" },
-      });
-      if (!directRes.ok) {
-        throw new Error("CoinGecko price lookup unavailable");
-      }
-      const json = (await directRes.json()) as {
-        hemi?: { usd?: number; usd_24h_change?: number };
-      };
-      const usd = json?.hemi?.usd;
-      if (typeof usd === "number" && Number.isFinite(usd) && usd > 0) {
-        return {
-          ok: true,
-          live: true,
-          usd,
-          usd24hChange:
-            typeof json?.hemi?.usd_24h_change === "number"
-              ? json.hemi.usd_24h_change
-              : null,
-          source: "coingecko",
-          fetchedAtIso: new Date().toISOString(),
-        };
-      }
-      throw new Error("Invalid CoinGecko payload");
+      return (await res.json()) as HemiPriceApiResponse;
     },
     staleTime: 60_000,
     refetchInterval: 60_000,
@@ -234,7 +201,9 @@ export default function BenchmarksPage() {
 
     return list.sort((a, b) => {
       if (sortBy === "efficiency") {
-        return b.zkops / b.tdpWatts - a.zkops / a.tdpWatts;
+        const effA = a.tdpWatts > 0 ? a.zkops / a.tdpWatts : 0;
+        const effB = b.tdpWatts > 0 ? b.zkops / b.tdpWatts : 0;
+        return effB - effA;
       }
       if (sortBy === "chacha") {
         return a.workloads["chacha-mix"] - b.workloads["chacha-mix"];
@@ -309,17 +278,10 @@ export default function BenchmarksPage() {
     e.preventDefault();
     if (!liveParsePreview?.ok || !liveParsePreview.entry) return;
 
-    const newEntry = liveParsePreview.entry;
-    const updated = [newEntry, ...communityEntries];
-    setCommunityEntries(updated);
-    try {
-      window.localStorage.setItem(LOCAL_STORAGE_BENCHMARKS_KEY, JSON.stringify(updated));
-    } catch {
-      // ignore
-    }
+    let canonicalEntry = liveParsePreview.entry;
 
     try {
-      await fetch("/api/benchmarks", {
+      const res = await fetch("/api/benchmarks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -333,14 +295,31 @@ export default function BenchmarksPage() {
           },
         }),
       });
+      if (res.ok) {
+        const payload = (await res.json()) as { ok?: boolean; entry?: BenchmarkEntry };
+        if (payload.ok && payload.entry) {
+          canonicalEntry = payload.entry;
+        }
+      }
     } catch {
-      // local state already updated
+      // Fall back to deterministic client entry when offline
     }
 
-    setSelectedGpuId(newEntry.id);
+    const updated = [
+      canonicalEntry,
+      ...communityEntries.filter((item) => item.id !== canonicalEntry.id),
+    ];
+    setCommunityEntries(updated);
+    try {
+      window.localStorage.setItem(LOCAL_STORAGE_BENCHMARKS_KEY, JSON.stringify(updated));
+    } catch {
+      // ignore
+    }
+
+    setSelectedGpuId(canonicalEntry.id);
     setRawInput("");
     setStatusBanner(
-      `● APPENDED: ${newEntry.model.toUpperCase()} // ${newEntry.zkops.toLocaleString()} zkOP/s`
+      `● APPENDED: ${canonicalEntry.model.toUpperCase()} // ${canonicalEntry.zkops.toLocaleString()} zkOP/s`
     );
     setRailMode("roi");
     setMobileView("rail");
@@ -624,7 +603,9 @@ export default function BenchmarksPage() {
                           {entry.zkops.toLocaleString()}
                         </span>
                         <span className="text-[10px] text-[#63635E]">
-                          {Math.round(entry.zkops / entry.tdpWatts).toLocaleString()} /W
+                          {entry.tdpWatts > 0
+                            ? `${Math.round(entry.zkops / entry.tdpWatts).toLocaleString()} /W`
+                            : "—"}
                         </span>
                       </div>
                       <div className="mt-1.5 h-1.5 w-full bg-[#232320]">
@@ -655,6 +636,37 @@ export default function BenchmarksPage() {
                   </tr>
                 );
               })}
+              {filteredEntries.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="bg-[#0B0B0A] px-4 py-12 text-center font-mono text-xs text-[#9A9A94]"
+                  >
+                    <div className="uppercase tracking-wider text-[#EDEDEC]">
+                      0 BENCHMARKS MATCH ACTIVE HARDWARE FILTERS
+                    </div>
+                    <p className="mt-1.5 font-sans text-[11px] text-[#63635E]">
+                      Clear vendor, OS, zkVM, or search filters to view the 13 calibrated
+                      baselines and community entries.
+                    </p>
+                    <div className="mt-3">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setVendorFilter("ALL");
+                          setOsFilter("ALL");
+                          setZkvmFilter("ALL");
+                          setSearchQuery("");
+                        }}
+                      >
+                        [RESET BENCHMARK FILTERS]
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -1135,6 +1147,10 @@ export default function BenchmarksPage() {
                   </div>
                 )}
 
+                <p className="font-sans text-[10px] leading-relaxed text-[#63635E]">
+                  Submissions persist locally in your browser and in the active serverless instance
+                  cache for session comparison.
+                </p>
                 <Button
                   type="submit"
                   size="lg"

@@ -433,6 +433,10 @@ export function runDeterministicSimulation(
     const minPriceHemi = Number(Math.max(1.4, (baseGuestCycles / 16_000_000) * 1.1).toFixed(2));
     const maxPriceHemi = Number((minPriceHemi * 3.5).toFixed(2));
 
+    warnings.push(
+      `SP1 Tier Baseline (\`main\` @ \`zkmarket c8333aa\`): Sized at ${peakVramMib.toLocaleString()} MiB (${minVramGb} GiB tier). Pending upstream PR #33 (\`max/sp1-12gb-tier\`) lowers SP1 v6.1.0 measured tiers to 9,500 MiB (134M / 12 GiB GPUs) and 12,000 MiB (268M / 16 GiB GPUs).`
+    );
+
     return {
       schema: 1,
       rule: "sp1-rv64-v6.1.0",
