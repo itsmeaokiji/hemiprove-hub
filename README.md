@@ -18,7 +18,7 @@ Built directly against the ABIs, deployment pins (`zkmarket@c8333aa`), and Proto
 
 ### `[01]` Marketplace & Escalating Auction Explorer (`/`)
 - **Dual-Chain Switching (`743111` & `43111`):** Connects out of the box to live **Hemi Sepolia (`743111`)** proxies and keeps **Hemi Mainnet (`43111`)** cleanly isolated as `STAGED` until router deployment.
-- **Strict `DATA: LIVE` vs. `DEMO` Isolation:** Defaults to `DEMO` showcase streams on boot (`localStorage`-persisted); toggling `DATA: LIVE` indexes `HemiProveRouter`, `ProgramRegistry`, and Blockscout v2 logs (`15s` cache) without mixing synthetic rows.
+- **Strict `DATA: LIVE` vs. `DEMO` Isolation:** Defaults to `DEMO` showcase streams on boot (`localStorage`-persisted); toggling `DATA: LIVE` indexes `HemiProveRouter` (`JobSubmitted`, `JobClaimed`, `JobFulfilled`), `ProgramRegistry`, and Blockscout v2 logs (`15s` cache) to compute real-time settlement latency and verified cycles without mixing synthetic rows.
 - **Docked Job Telemetry Inspector:** Visualizes Linear/Quadratic Reverse Dutch Auction escalation, EOA vs. Smart Contract callers, ELF storage origins (`Arweave`, `IPFS`, `HTTP`), and deep-links into `/simulate`.
 
 ### `[02]` Multi-Vendor GPU `zkOP/s` Leaderboard & ROI Studio (`/benchmarks`)
@@ -84,10 +84,11 @@ pnpm dev      # Open http://localhost:3000
 **Verification & Build Commands:**
 
 ```bash
-pnpm lint     # Strict `tsc --noEmit` type verification
-pnpm test     # Unit tests (AuctionMath, parser, simulation, codegen, KPIs)
-pnpm build    # Optimized Next.js production build
-pnpm start    # Serve production build on port 3000
+pnpm typecheck # Strict `tsc --noEmit` type verification
+pnpm lint      # Next.js ESLint checks
+pnpm test      # Unit & offline-mocked API route tests
+pnpm build     # Optimized Next.js production build
+pnpm start     # Serve production build on port 3000
 ```
 
 ---
@@ -104,7 +105,7 @@ pnpm start    # Serve production build on port 3000
 
 - **Stateless Community Benchmark Store:** `/benchmarks` validates submissions server-side (up to `100,000` characters per payload with `id`-based deduplication) and keeps new entries in serverless process memory plus browser `localStorage` — there is no external database, authentication, or per-IP rate limiter yet.
 - **Serverless Deterministic Preview:** When deployed on serverless hosts without `ZKMINER_BIN` (such as Vercel), `/simulate` runs deterministic Protocol 12 modeling (`ENGINE: DETERMINISTIC MODEL (PREVIEW)`) rather than fetching or executing raw ELF binaries.
-- **Read-Only Chain Client & Codegen:** HemiProve Hub never asks for private keys or executes wallet transactions in the browser; exported Solidity and `viem` artifacts are reviewed and run locally by the user. `pnpm lint` runs strict `tsc --noEmit` type verification (no separate ESLint config is included).
+- **Read-Only Chain Client & Codegen:** HemiProve Hub never asks for private keys or executes wallet transactions in the browser; exported Solidity and `viem` artifacts are reviewed and run locally by the user. Automated GitHub Actions CI runs `typecheck`, `lint`, `test`, and `build` checks.
 
 ---
 
@@ -113,7 +114,7 @@ pnpm start    # Serve production build on port 3000
 | Milestone | Summary | Status / Trigger |
 | :--- | :--- | :---: |
 | **M1: Core Workbench & Sepolia Parity** | Live Hemi Sepolia (`743111`) Explorer, `13`-GPU `zkOP/s` Leaderboard & ROI Studio, pre-flight sizing & hardened contract/SDK export, and unit tests. | `Shipped` |
-| **M2: Explorer Depth & CI Hardening** | Real-time settlement duration and verified cycle tracking from on-chain events, expanded router ABI support, ESLint + API route tests, and automated CI checks. | `Next` |
+| **M2: Explorer Depth & CI Hardening** | Real-time settlement duration and verified cycle tracking from on-chain events, expanded router ABI support, ESLint + API route tests, and automated CI checks. | `Shipped` |
 | **M3: `zk-miner` Sync & Persistent Benchmarks** | Sync updated SP1 VRAM tiers (`PR #33`) and blended dual-zkVM `MzkOP/s` ranking once merged upstream, plus persistent database storage and rate limits for `/benchmarks`. | `Upstream & DB` |
 | **M4: Mainnet (`43111`) & Execution Extensions** | Activate Hemi Mainnet support upon official router launch, plus optional browser wallet job submission and remote `zkminer` worker execution. | `Post-Mainnet` |
 

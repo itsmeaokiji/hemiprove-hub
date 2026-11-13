@@ -8,6 +8,63 @@ import { parseAbi } from "viem";
  * `HemiProve` is a diamond-lite router at a single stable proxy address that delegatecalls to
  * 5 audited facets: Core, Fulfill, FulfillCycle, Aux, and AuxGov.
  */
+const JOB_DESCRIPTOR_COMPONENTS = [
+  { name: "programId", type: "bytes32" },
+  { name: "proofSystemId", type: "bytes32" },
+  { name: "callbackContract", type: "address" },
+  { name: "assignedProver", type: "address" },
+  { name: "tag", type: "bytes32" },
+  { name: "inputData", type: "bytes" },
+  { name: "callbackExtraData", type: "bytes" },
+  { name: "extraVerifierData", type: "bytes" },
+  { name: "expectedJournalHash", type: "bytes32" },
+  { name: "journalFields", type: "bytes32" },
+] as const;
+
+const HASHED_DESCRIPTOR_COMPONENTS = [
+  { name: "programId", type: "bytes32" },
+  { name: "proofSystemId", type: "bytes32" },
+  { name: "callbackContract", type: "address" },
+  { name: "assignedProver", type: "address" },
+  { name: "tag", type: "bytes32" },
+  { name: "inputDataHash", type: "bytes32" },
+  { name: "expectedJournalHash", type: "bytes32" },
+  { name: "journalFields", type: "bytes32" },
+] as const;
+
+const AUCTION_CONFIG_COMPONENTS = [
+  { name: "minPrice", type: "uint96" },
+  { name: "maxPrice", type: "uint96" },
+  { name: "rampUpPeriod", type: "uint40" },
+  { name: "curveType", type: "uint8" },
+  { name: "fulfillmentTimeout", type: "uint40" },
+  { name: "lockCollateralBps", type: "uint96" },
+  { name: "speedPremium", type: "uint96" },
+  { name: "exclusivityDuration", type: "uint40" },
+  { name: "callbackGasLimit", type: "uint32" },
+  { name: "excludeFromEwma", type: "bool" },
+  { name: "laxCallbackMode", type: "bool" },
+] as const;
+
+const CYCLE_CONFIG_COMPONENTS = [
+  { name: "expectedCycles", type: "uint64" },
+  { name: "cycleCommitCollateral", type: "uint96" },
+  { name: "snapshotMode", type: "uint8" },
+  { name: "snapshotToleranceBps", type: "uint16" },
+  { name: "snapshotFullBonusOvershootBps", type: "uint16" },
+  { name: "snapshotUndershootPenaltyBps", type: "uint16" },
+  { name: "snapshotFullPenaltyUndershootBps", type: "uint16" },
+  { name: "snapshotResolverRewardBps", type: "uint16" },
+] as const;
+
+const BID_CONFIG_COMPONENTS = [
+  { name: "underbidWindow", type: "uint40" },
+  { name: "maxBiddingDuration", type: "uint40" },
+  { name: "maxBidExtension", type: "uint40" },
+  { name: "minBidDecrement", type: "uint96" },
+  { name: "bidExtensionCurveType", type: "uint8" },
+] as const;
+
 export const HEMI_PROVE_ROUTER_ABI = [
   // ─── Core Facet Events ─────────────────────────────────────────────────────
   {
@@ -47,7 +104,7 @@ export const HEMI_PROVE_ROUTER_ABI = [
       { name: "amount", type: "uint256", indexed: false },
     ],
   },
-  // ─── Fulfill Facet Events ──────────────────────────────────────────────────
+  // ─── Fulfill & Lifecycle Events ────────────────────────────────────────────
   {
     type: "event",
     name: "JobFulfilled",
@@ -104,71 +161,43 @@ export const HEMI_PROVE_ROUTER_ABI = [
       { name: "bonusBurned", type: "uint256", indexed: false },
     ],
   },
+  {
+    type: "event",
+    name: "SlashExecutedCancelDeferred",
+    inputs: [{ name: "jobId", type: "bytes32", indexed: true }],
+  },
+  {
+    type: "event",
+    name: "GraceReleased",
+    inputs: [
+      { name: "jobId", type: "bytes32", indexed: true },
+      { name: "prover", type: "address", indexed: true },
+      { name: "proofSystemId", type: "bytes32", indexed: false },
+      { name: "releasedCollateral", type: "uint128", indexed: false },
+      { name: "operator", type: "address", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "GracePauseReleased",
+    inputs: [
+      { name: "jobId", type: "bytes32", indexed: true },
+      { name: "prover", type: "address", indexed: true },
+      { name: "releasedCollateral", type: "uint128", indexed: false },
+      { name: "operator", type: "address", indexed: false },
+    ],
+  },
 
-  // ─── Core Facet Functions ──────────────────────────────────────────────────
+  // ─── Core & Convenience Submission Functions ───────────────────────────────
   {
     type: "function",
     name: "submitJob",
     stateMutability: "nonpayable",
     inputs: [
-      {
-        name: "descriptor",
-        type: "tuple",
-        components: [
-          { name: "programId", type: "bytes32" },
-          { name: "proofSystemId", type: "bytes32" },
-          { name: "callbackContract", type: "address" },
-          { name: "assignedProver", type: "address" },
-          { name: "tag", type: "bytes32" },
-          { name: "inputData", type: "bytes" },
-          { name: "callbackExtraData", type: "bytes" },
-          { name: "extraVerifierData", type: "bytes" },
-          { name: "expectedJournalHash", type: "bytes32" },
-          { name: "journalFields", type: "bytes32" },
-        ],
-      },
-      {
-        name: "config",
-        type: "tuple",
-        components: [
-          { name: "minPrice", type: "uint96" },
-          { name: "maxPrice", type: "uint96" },
-          { name: "rampUpPeriod", type: "uint40" },
-          { name: "curveType", type: "uint8" },
-          { name: "fulfillmentTimeout", type: "uint40" },
-          { name: "lockCollateralBps", type: "uint96" },
-          { name: "speedPremium", type: "uint96" },
-          { name: "exclusivityDuration", type: "uint40" },
-          { name: "callbackGasLimit", type: "uint32" },
-          { name: "excludeFromEwma", type: "bool" },
-          { name: "laxCallbackMode", type: "bool" },
-        ],
-      },
-      {
-        name: "cycleConfig",
-        type: "tuple",
-        components: [
-          { name: "expectedCycles", type: "uint64" },
-          { name: "cycleCommitCollateral", type: "uint96" },
-          { name: "snapshotMode", type: "uint8" },
-          { name: "snapshotToleranceBps", type: "uint16" },
-          { name: "snapshotFullBonusOvershootBps", type: "uint16" },
-          { name: "snapshotUndershootPenaltyBps", type: "uint16" },
-          { name: "snapshotFullPenaltyUndershootBps", type: "uint16" },
-          { name: "snapshotResolverRewardBps", type: "uint16" },
-        ],
-      },
-      {
-        name: "bidConfig",
-        type: "tuple",
-        components: [
-          { name: "underbidWindow", type: "uint40" },
-          { name: "maxBiddingDuration", type: "uint40" },
-          { name: "maxBidExtension", type: "uint40" },
-          { name: "minBidDecrement", type: "uint96" },
-          { name: "bidExtensionCurveType", type: "uint8" },
-        ],
-      },
+      { name: "descriptor", type: "tuple", components: JOB_DESCRIPTOR_COMPONENTS },
+      { name: "config", type: "tuple", components: AUCTION_CONFIG_COMPONENTS },
+      { name: "cycleConfig", type: "tuple", components: CYCLE_CONFIG_COMPONENTS },
+      { name: "bidConfig", type: "tuple", components: BID_CONFIG_COMPONENTS },
     ],
     outputs: [{ name: "jobId", type: "bytes32" }],
   },
@@ -188,6 +217,30 @@ export const HEMI_PROVE_ROUTER_ABI = [
   },
   {
     type: "function",
+    name: "submitJobSimple",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "descriptor", type: "tuple", components: JOB_DESCRIPTOR_COMPONENTS },
+      { name: "presetName", type: "bytes32" },
+    ],
+    outputs: [{ name: "jobId", type: "bytes32" }],
+  },
+  {
+    type: "function",
+    name: "submitJobBatch",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "descriptors", type: "tuple[]", components: JOB_DESCRIPTOR_COMPONENTS },
+      { name: "configs", type: "tuple[]", components: AUCTION_CONFIG_COMPONENTS },
+      { name: "cycleConfigs_", type: "tuple[]", components: CYCLE_CONFIG_COMPONENTS },
+      { name: "bidConfigs_", type: "tuple[]", components: BID_CONFIG_COMPONENTS },
+    ],
+    outputs: [{ name: "jobIds", type: "bytes32[]" }],
+  },
+
+  // ─── Claim, Fulfillment, Release & Slash Functions ─────────────────────────
+  {
+    type: "function",
     name: "claimJob",
     stateMutability: "nonpayable",
     inputs: [
@@ -199,26 +252,51 @@ export const HEMI_PROVE_ROUTER_ABI = [
   },
   {
     type: "function",
+    name: "claimJobDelegated",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "jobId", type: "bytes32" },
+      { name: "prover", type: "address" },
+      { name: "priceFloor", type: "uint96" },
+      { name: "premiumFloor", type: "uint96" },
+    ],
+    outputs: [{ name: "price", type: "uint96" }],
+  },
+  {
+    type: "function",
+    name: "claimAndFulfillAssigned",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "jobId", type: "bytes32" },
+      { name: "priceFloor", type: "uint96" },
+      { name: "premiumFloor", type: "uint96" },
+      { name: "descriptor", type: "tuple", components: JOB_DESCRIPTOR_COMPONENTS },
+      { name: "publicValues", type: "bytes" },
+      { name: "proofBytes", type: "bytes" },
+    ],
+    outputs: [{ name: "price", type: "uint96" }],
+  },
+  {
+    type: "function",
     name: "fulfillJob",
     stateMutability: "nonpayable",
     inputs: [
       { name: "jobId", type: "bytes32" },
-      {
-        name: "descriptor",
-        type: "tuple",
-        components: [
-          { name: "programId", type: "bytes32" },
-          { name: "proofSystemId", type: "bytes32" },
-          { name: "callbackContract", type: "address" },
-          { name: "assignedProver", type: "address" },
-          { name: "tag", type: "bytes32" },
-          { name: "inputData", type: "bytes" },
-          { name: "callbackExtraData", type: "bytes" },
-          { name: "extraVerifierData", type: "bytes" },
-          { name: "expectedJournalHash", type: "bytes32" },
-          { name: "journalFields", type: "bytes32" },
-        ],
-      },
+      { name: "descriptor", type: "tuple", components: JOB_DESCRIPTOR_COMPONENTS },
+      { name: "publicValues", type: "bytes" },
+      { name: "proofBytes", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "fulfillJobHashed",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "jobId", type: "bytes32" },
+      { name: "hashedDesc", type: "tuple", components: HASHED_DESCRIPTOR_COMPONENTS },
+      { name: "callbackExtraData", type: "bytes" },
+      { name: "extraVerifierData", type: "bytes" },
       { name: "publicValues", type: "bytes" },
       { name: "proofBytes", type: "bytes" },
     ],
@@ -230,6 +308,47 @@ export const HEMI_PROVE_ROUTER_ABI = [
     stateMutability: "nonpayable",
     inputs: [{ name: "jobId", type: "bytes32" }],
     outputs: [],
+  },
+  {
+    type: "function",
+    name: "graceRelease",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "jobId", type: "bytes32" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "graceReleaseWithDescriptor",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "jobId", type: "bytes32" },
+      { name: "descriptor", type: "tuple", components: JOB_DESCRIPTOR_COMPONENTS },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "gracePauseRelease",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "jobId", type: "bytes32" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "slashAndReopen",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "jobId", type: "bytes32" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "slashAndClaim",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "jobId", type: "bytes32" },
+      { name: "priceFloor", type: "uint96" },
+    ],
+    outputs: [{ name: "price", type: "uint96" }],
   },
   {
     type: "function",
@@ -277,12 +396,34 @@ export const HEMI_PROVE_ROUTER_ABI = [
   },
   {
     type: "function",
+    name: "getJobExtras",
+    stateMutability: "view",
+    inputs: [{ name: "jobId", type: "bytes32" }],
+    outputs: [
+      { name: "pauseCredit", type: "uint256" },
+      { name: "pauseBase", type: "uint40" },
+      { name: "assignedOnly", type: "bool" },
+    ],
+  },
+  {
+    type: "function",
+    name: "getJobSnapshots",
+    stateMutability: "view",
+    inputs: [{ name: "jobId", type: "bytes32" }],
+    outputs: [
+      { name: "releasePenaltyBps", type: "uint256" },
+      { name: "minCollateral", type: "uint256" },
+      { name: "collateralBps", type: "uint256" },
+    ],
+  },
+  {
+    type: "function",
     name: "getJobStatusView",
     stateMutability: "view",
     inputs: [{ name: "jobId", type: "bytes32" }],
     outputs: [
       {
-        name: "",
+        name: "view_",
         type: "tuple",
         components: [
           { name: "status", type: "uint8" },

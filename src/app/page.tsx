@@ -1041,6 +1041,14 @@ export default function MarketplacePage() {
                       {inspectedJob.expectedCycles.toLocaleString()}
                     </span>
                   </div>
+                  {inspectedJob.actualCycles !== undefined && (
+                    <div className="flex items-center justify-between px-2.5 py-1.5">
+                      <span className="text-[#63635E]">ACTUAL_CYCLES (VERIFIED)</span>
+                      <span className="font-semibold text-[#10B981]">
+                        {inspectedJob.actualCycles.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between px-2.5 py-1.5">
                     <span className="text-[#63635E]">KECCAK_CHARGES</span>
                     <span className="text-[#9A9A94]">
@@ -1088,12 +1096,51 @@ export default function MarketplacePage() {
                       <span className="text-[#9A9A94]">{inspectedJob.proverGpuHint}</span>
                     </div>
                   )}
+                  {inspectedJob.settlementSecs !== undefined &&
+                    inspectedJob.settlementSecs > 0 && (
+                      <div className="flex items-center justify-between px-2.5 py-1.5">
+                        <span className="text-[#63635E]">SETTLEMENT TIME</span>
+                        <span className="text-[#10B981]">
+                          {inspectedJob.settlementSecs.toFixed(1)}s
+                        </span>
+                      </div>
+                    )}
                   {inspectedJob.txHash && (
                     <div className="flex items-center justify-between px-2.5 py-1.5">
                       <span className="text-[#63635E]">SUBMIT_TX</span>
-                      <span className="text-[#9A9A94]">
-                        {shortenHex(inspectedJob.txHash, 6, 6)}
-                      </span>
+                      {!inspectedJob.isSimulatedStream ? (
+                        <a
+                          href={`${deployment.explorerUrl}/tx/${inspectedJob.txHash}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[#9A9A94] underline decoration-[#232320] hover:text-[#EDEDEC] hover:decoration-[#FF5500]"
+                        >
+                          {shortenHex(inspectedJob.txHash, 6, 6)} ↗
+                        </a>
+                      ) : (
+                        <span className="text-[#9A9A94]">
+                          {shortenHex(inspectedJob.txHash, 6, 6)}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {inspectedJob.fulfillTxHash && (
+                    <div className="flex items-center justify-between px-2.5 py-1.5">
+                      <span className="text-[#63635E]">FULFILL_TX</span>
+                      {!inspectedJob.isSimulatedStream ? (
+                        <a
+                          href={`${deployment.explorerUrl}/tx/${inspectedJob.fulfillTxHash}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[#10B981] underline decoration-[#232320] hover:decoration-[#10B981]"
+                        >
+                          {shortenHex(inspectedJob.fulfillTxHash, 6, 6)} ↗
+                        </a>
+                      ) : (
+                        <span className="text-[#10B981]">
+                          {shortenHex(inspectedJob.fulfillTxHash, 6, 6)}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>

@@ -223,7 +223,7 @@ export function Navbar() {
             className="flex h-8 items-center border-r border-[#232320] pr-2.5 font-mono text-[11px] font-semibold tracking-tight text-[#EDEDEC] sm:h-9 sm:pr-4 sm:text-sm md:h-12 md:pr-5"
           >
             <span>HEMIPROVE</span>
-            <span className="mx-1 sm:mx-1.5 text-[#63635E]">//</span>
+            <span className="mx-1 sm:mx-1.5 text-[#63635E]">{"//"}</span>
             <span className="text-[#EDEDEC]">HUB</span>
           </Link>
 

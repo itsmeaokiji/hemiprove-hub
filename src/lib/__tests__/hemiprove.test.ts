@@ -22,6 +22,18 @@ import {
   buildBaselineKpis,
   buildLiveKpis,
 } from "@/lib/marketplace-data";
+import { HEMI_PROVE_ROUTER_ABI } from "@/lib/hemiprove-abi";
+import {
+  computeSettlementDurationSecs,
+  extractRouterEventsFromBlockscoutLogs,
+} from "@/lib/marketplace-events";
+import {
+  buildMockBlockscoutRouterLogs,
+  TEST_FULFILL_TX,
+  TEST_JOB_ID,
+  TEST_PROVER,
+  TEST_SUBMIT_TX,
+} from "@/lib/__tests__/mock-logs";
 import {
   KECCAK_CHARGE_PER_REQUEST,
   runDeterministicSimulation,
@@ -231,5 +243,75 @@ describe("marketplace-data", () => {
     const deployedLive = buildLiveKpis(true, 12, 42.5, jobs);
     assert.equal(deployedLive.totalJobs, 12);
     assert.equal(deployedLive.totalPaidHemi, 42.5);
+  });
+});
+
+describe("marketplace-events & expanded HemiProveRouter ABI", () => {
+  it("exposes extended HemiProveRouter convenience, batch, slash, grace, and view ABIs", () => {
+    assert.equal(HEMI_PROVE_ROUTER_ABI[0].name, "JobSubmitted");
+    assert.equal(HEMI_PROVE_ROUTER_ABI[1].name, "JobClaimed");
+    assert.equal(HEMI_PROVE_ROUTER_ABI[3].name, "JobFulfilled");
+
+    const abiNames = new Set<string>(HEMI_PROVE_ROUTER_ABI.map((entry) => entry.name));
+    const expected = [
+      "submitJobSimple",
+      "submitJobBatch",
+      "claimJobDelegated",
+      "claimAndFulfillAssigned",
+      "fulfillJobHashed",
+      "slashAndReopen",
+      "slashAndClaim",
+      "graceRelease",
+      "graceReleaseWithDescriptor",
+      "gracePauseRelease",
+      "getJobExtras",
+      "getJobSnapshots",
+      "SlashExecutedCancelDeferred",
+      "GraceReleased",
+      "GracePauseReleased",
+    ];
+    for (const name of expected) {
+      assert.ok(abiNames.has(name), `Missing ABI definition for ${name}`);
+    }
+  });
+
+  it("computes positive settlement durations and guards invalid timestamps", () => {
+    assert.equal(
+      computeSettlementDurationSecs(
+        "2026-11-13T00:00:00.000Z",
+        "2026-11-13T00:00:42.500Z"
+      ),
+      42.5
+    );
+    assert.equal(
+      computeSettlementDurationSecs(
+        "2026-11-13T00:00:42.500Z",
+        "2026-11-13T00:00:00.000Z"
+      ),
+      undefined
+    );
+    assert.equal(computeSettlementDurationSecs("bad-date", "2026-11-13T00:00:10Z"), undefined);
+  });
+
+  it("correlates JobSubmitted, JobClaimed, and JobFulfilled Blockscout logs", () => {
+    const items = buildMockBlockscoutRouterLogs();
+    const extracted = extractRouterEventsFromBlockscoutLogs(items);
+
+    assert.equal(extracted.submittedCandidates.length, 1);
+    assert.equal(extracted.submittedCandidates[0]?.txHash, TEST_SUBMIT_TX);
+
+    const jobKey = TEST_JOB_ID.toLowerCase();
+    const claim = extracted.claimsByJobId.get(jobKey);
+    const fulfill = extracted.fulfillmentsByJobId.get(jobKey);
+
+    assert.equal(claim?.prover.toLowerCase(), TEST_PROVER.toLowerCase());
+    assert.equal(fulfill?.actualCycles, 51_380_224);
+    assert.equal(fulfill?.txHash, TEST_FULFILL_TX);
+
+    const secs = computeSettlementDurationSecs(
+      extracted.submittedCandidates[0]?.blockTimestamp,
+      fulfill?.blockTimestamp
+    );
+    assert.equal(secs, 42.5);
   });
 });

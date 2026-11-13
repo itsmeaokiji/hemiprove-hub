@@ -41,6 +41,14 @@ registerHooks({
       }
     }
 
+    if (specifier.startsWith("next/") && !path.extname(specifier)) {
+      try {
+        return nextResolve(`${specifier}.js`, context);
+      } catch {
+        // Fall through to default resolution
+      }
+    }
+
     return nextResolve(specifier, context);
   },
 

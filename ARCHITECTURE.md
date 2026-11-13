@@ -61,6 +61,9 @@ flowchart TD
 ```text
 hemiprove-hub/
 ├── .env.example                      # Optional ZKMINER_BIN & Mainnet 43111 promotion vars
+├── .eslintrc.json                    # Next.js Core Web Vitals & TypeScript ESLint config
+├── .github/
+│   └── workflows/ci.yml              # GitHub Actions CI (typecheck, lint, test, build)
 ├── ARCHITECTURE.md                   # Protocol, indexing, and simulation math specification
 ├── DESIGN.md                         # Warm Matte Carbon datasheet UI/UX constraints
 ├── LICENSE                           # MIT open-source license
@@ -92,12 +95,15 @@ hemiprove-hub/
     │   └── seed-benchmarks.json      # 13 calibrated NVIDIA CUDA, AMD ROCm/HIP & Intel SYCL baselines
     └── lib/
         ├── __tests__/
-        │   └── hemiprove.test.ts     # Unit tests (AuctionMath, parser, simulation, codegen, KPIs)
+        │   ├── api-routes.test.ts    # Offline-mocked integration tests for all 4 API routes
+        │   ├── hemiprove.test.ts     # Unit tests (AuctionMath, parser, simulation, codegen, ABI/events)
+        │   └── mock-logs.ts          # ABI-encoded Blockscout router event test fixtures
         ├── benchmark-parser.ts       # Dual `zkminer benchmark` CLI stdout & `--json` parser
         ├── code-generator.ts         # Solidity (`IHemiProveCallback`) & TypeScript (`viem`) codegen
         ├── hemi-chain.ts             # Chain definitions, deployments, code pins, proofSystemIds, AuctionMath
         ├── hemiprove-abi.ts          # Exact HemiProveRouter, Staking, ProgramRegistry & ERC20 ABIs
         ├── marketplace-data.ts       # Job types, ELF URI source classifier, LIVE vs DEMO KPI builders
+        ├── marketplace-events.ts     # Router event correlation (JobSubmitted/Claimed/Fulfilled) & settlement timing
         ├── simulate-engine.ts        # Protocol 12 (`risc0-public-v3`), SP1 & OpenVM sizing math
         └── utils.ts                  # Class merge (`cn`), hex truncation, and duration formatters
 ```
@@ -128,9 +134,9 @@ When querying an active deployment, `src/app/api/marketplace/route.ts` caches re
 
 1. **Router State + Fast RPC Window Scan:**
    - Reads `jobIndex()`, `paused()`, and `totalPaidToProvers()` in parallel via `Promise.allSettled`.
-   - Scans `JobSubmitted` logs across `[max(headBlock - 2000, scanFromBlock), headBlock]` (`scanFromBlock = 7,095,745` on Sepolia), retaining up to `36` recent candidates so cancelled bursts never crowd out active jobs.
-2. **Historical Blockscout v2 Log Backfill:**
-   - Whenever fewer than `12` candidate jobs exist in the `2,000`-block RPC window, fetches `${blockscoutApiUrl}/addresses/${router}/logs` and decodes historical `JobSubmitted` events via `viem`'s `decodeEventLog` against `HEMI_PROVE_ROUTER_ABI` (preserving `block_timestamp` when present).
+   - Scans `JobSubmitted`, `JobClaimed`, and `JobFulfilled` logs across `[max(headBlock - 2000, scanFromBlock), headBlock]` (`scanFromBlock = 7,095,745` on Sepolia), retaining up to `36` recent candidates so cancelled bursts never crowd out active jobs.
+2. **Historical Blockscout v2 Log Backfill & Timestamp Correlation:**
+   - Whenever fewer than `12` candidate jobs exist in the `2,000`-block RPC window, fetches `${blockscoutApiUrl}/addresses/${router}/logs` and decodes `JobSubmitted`, `JobClaimed`, and `JobFulfilled` events via `viem`'s `decodeEventLog` (`src/lib/marketplace-events.ts`), preserving `block_timestamp`, `actualCycles`, and `fulfillTxHash`. Missing timestamps for RPC-only matched jobs are backfilled via deduplicated `getBlock` calls (`<= 12` blocks) to compute exact `settlementSecs` and live `avgSettlementSecs`.
 3. **On-Chain Enrichment (`ProgramRegistry` + `getJobStatusView`):**
    - Deduplicates non-zero `programId` values and queries `ProgramRegistry` (`0xCC761A929747A81e34517e1f4F98247da925cAb4`) via `getProgram(programId)` (program name, `familyId`, `resources.estimatedCycles`) and `getStorageURIs(programId)` (`StorageType`: `0 = IPFS`, `1 = Arweave`, `2 = HTTP`, `3 = Custom`).
    - Queries `HemiProveRouter.getJobStatusView(jobId)` and `eth_getCode(caller)` in batches of `12` until up to `12` valid jobs are collected:

@@ -12,8 +12,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "tsc --noEmit",
-    "test": "node --import ./scripts/register-paths.mjs --test src/lib/__tests__/hemiprove.test.ts"
+    "typecheck": "tsc --noEmit",
+    "lint": "next lint",
+    "test": "node --import ./scripts/register-paths.mjs --test src/lib/__tests__/hemiprove.test.ts src/lib/__tests__/api-routes.test.ts"
   },
   "dependencies": {
     "@fontsource/inter": "^5.1.1",
@@ -36,6 +37,8 @@
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^15.5.29",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.2"

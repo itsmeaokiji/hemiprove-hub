@@ -32,12 +32,14 @@ export interface MarketplaceJob {
   elapsedSecs: number;
   curveType: 0 | 1; // 0 = Linear, 1 = Quadratic
   expectedCycles: number;
+  actualCycles?: number;
   status: JobStatusLabel;
   proverAddress: string | null;
   proverGpuHint?: string;
   settlementSecs?: number;
   submittedAtIso: string;
   txHash?: string;
+  fulfillTxHash?: string;
   isSimulatedStream?: boolean;
 }
 

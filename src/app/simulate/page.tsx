@@ -705,7 +705,7 @@ export default function SimulateStudioPage() {
                         >
                           <td className="px-3 py-2 text-[#EDEDEC]">
                             <span className="hidden text-[#63635E] sm:inline">
-                              SEG 0{idx + 1} //{" "}
+                              SEG 0{idx + 1} {"//"}{" "}
                             </span>
                             <span className="font-semibold">PO2={row.po2}</span>
                             <span className="ml-1 text-[10px] text-[#63635E]">

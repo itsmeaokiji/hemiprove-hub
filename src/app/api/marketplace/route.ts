@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   createPublicClient,
-  decodeEventLog,
   formatUnits,
   http,
   type Address,
@@ -24,17 +23,26 @@ import {
   type MarketplaceApiResponse,
   type MarketplaceJob,
 } from "@/lib/marketplace-data";
+import {
+  ZERO_BYTES32,
+  computeSettlementDurationSecs,
+  extractRouterEventsFromBlockscoutLogs,
+  toSafeCycleNumber,
+  type BlockscoutLogItem,
+  type ClaimedEventMeta,
+  type FulfilledEventMeta,
+  type RawSubmittedCandidate,
+} from "@/lib/marketplace-events";
 
 export const dynamic = "force-dynamic";
 
-const ZERO_BYTES32 =
-  "0x0000000000000000000000000000000000000000000000000000000000000000";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 const MARKETPLACE_CACHE_TTL_MS = 15_000;
 const MAX_CANDIDATE_SCAN = 36;
 const TARGET_VALID_ONCHAIN_JOBS = 12;
 const ENRICH_BATCH_SIZE = 12;
+const MAX_BLOCK_TIMESTAMP_LOOKUPS = 12;
 
 interface CachedMarketplaceEntry {
   expiresAtMs: number;
@@ -43,31 +51,12 @@ interface CachedMarketplaceEntry {
 
 const marketplaceCache = new Map<string, CachedMarketplaceEntry>();
 
-interface RawSubmittedCandidate {
-  jobId: Hex;
-  proofSystemId: Hex;
-  caller: Address;
-  programId: Hex;
-  minPrice?: bigint;
-  maxPrice?: bigint;
-  txHash?: string;
-  blockTimestamp?: string;
-}
-
 interface ResolvedProgramMeta {
   name?: string;
   familyLabel?: string;
   estimatedCycles?: number;
   elfUri?: string;
   elfSourceType?: ElfSourceType;
-}
-
-interface BlockscoutLogItem {
-  data?: string;
-  topics?: Array<string | null>;
-  transaction_hash?: string;
-  tx_hash?: string;
-  block_timestamp?: string;
 }
 
 function mapStorageType(storageType: number, uri: string): ElfSourceType {
@@ -120,6 +109,8 @@ export async function GET(request: NextRequest) {
 
   const rawCandidates: RawSubmittedCandidate[] = [];
   const seenJobIds = new Set<string>();
+  const claimsByJobId = new Map<string, ClaimedEventMeta>();
+  const fulfillmentsByJobId = new Map<string, FulfilledEventMeta>();
 
   try {
     const headBlock = await client.getBlockNumber();
@@ -155,7 +146,7 @@ export async function GET(request: NextRequest) {
         totalPaidHemi = Number(formatUnits(paidRes.value, 18));
       }
 
-      // 1. Fast RPC scan over the latest 2,000 blocks (retain up to MAX_CANDIDATE_SCAN past cancelled bursts)
+      // 1. Fast RPC scan over the latest 2,000 blocks for JobSubmitted, JobClaimed & JobFulfilled
       const lookbackWindow = BigInt(2_000);
       const windowStart =
         headBlock > lookbackWindow ? headBlock - lookbackWindow : BigInt(0);
@@ -165,14 +156,62 @@ export async function GET(request: NextRequest) {
           : deployment.scanFromBlock;
 
       if (headBlock >= fromBlock) {
-        const submittedLogs = await client
-          .getLogs({
-            address: deployment.router,
-            event: HEMI_PROVE_ROUTER_ABI[0],
-            fromBlock,
-            toBlock: headBlock,
-          })
-          .catch(() => []);
+        const [submittedLogs, claimedLogs, fulfilledLogs] = await Promise.all([
+          client
+            .getLogs({
+              address: deployment.router,
+              event: HEMI_PROVE_ROUTER_ABI[0],
+              fromBlock,
+              toBlock: headBlock,
+            })
+            .catch(() => []),
+          client
+            .getLogs({
+              address: deployment.router,
+              event: HEMI_PROVE_ROUTER_ABI[1],
+              fromBlock,
+              toBlock: headBlock,
+            })
+            .catch(() => []),
+          client
+            .getLogs({
+              address: deployment.router,
+              event: HEMI_PROVE_ROUTER_ABI[3],
+              fromBlock,
+              toBlock: headBlock,
+            })
+            .catch(() => []),
+        ]);
+
+        for (const log of claimedLogs.slice().reverse()) {
+          const args = log.args;
+          if (!args.jobId || !args.prover) continue;
+          const lowerId = args.jobId.toLowerCase();
+          if (!claimsByJobId.has(lowerId)) {
+            claimsByJobId.set(lowerId, {
+              prover: args.prover,
+              settledPrice: args.settledPrice,
+              txHash: log.transactionHash ?? undefined,
+              blockNumber: log.blockNumber ?? undefined,
+            });
+          }
+        }
+
+        for (const log of fulfilledLogs.slice().reverse()) {
+          const args = log.args;
+          if (!args.jobId || !args.prover) continue;
+          const lowerId = args.jobId.toLowerCase();
+          if (!fulfillmentsByJobId.has(lowerId)) {
+            fulfillmentsByJobId.set(lowerId, {
+              prover: args.prover,
+              settledPrice: args.settledPrice,
+              proverPayout: args.proverPayout,
+              actualCycles: toSafeCycleNumber(args.actualCycles),
+              txHash: log.transactionHash ?? undefined,
+              blockNumber: log.blockNumber ?? undefined,
+            });
+          }
+        }
 
         const recentRpcLogs = submittedLogs.slice(-MAX_CANDIDATE_SCAN).reverse();
         for (const log of recentRpcLogs) {
@@ -189,6 +228,7 @@ export async function GET(request: NextRequest) {
             minPrice: args.minPrice,
             maxPrice: args.maxPrice,
             txHash: log.transactionHash ?? undefined,
+            blockNumber: log.blockNumber ?? undefined,
           });
         }
       }
@@ -212,52 +252,37 @@ export async function GET(request: NextRequest) {
         blockscoutConnected = true;
         const json = (await res.json()) as { items?: BlockscoutLogItem[] };
         const items = Array.isArray(json?.items) ? json.items : [];
+        const decoded = extractRouterEventsFromBlockscoutLogs(items, MAX_CANDIDATE_SCAN);
 
-        for (const item of items) {
+        for (const cand of decoded.submittedCandidates) {
           if (rawCandidates.length >= MAX_CANDIDATE_SCAN) break;
-          if (!item.data || !item.data.startsWith("0x") || !Array.isArray(item.topics)) {
+          const lowerId = cand.jobId.toLowerCase();
+          if (seenJobIds.has(lowerId)) {
+            const existing = rawCandidates.find((r) => r.jobId.toLowerCase() === lowerId);
+            if (existing && !existing.blockTimestamp && cand.blockTimestamp) {
+              existing.blockTimestamp = cand.blockTimestamp;
+            }
             continue;
           }
-          const validTopics = item.topics.filter(
-            (t): t is Hex => typeof t === "string" && t.startsWith("0x")
-          );
-          if (validTopics.length === 0) continue;
+          seenJobIds.add(lowerId);
+          rawCandidates.push(cand);
+        }
 
-          try {
-            const decoded = decodeEventLog({
-              abi: HEMI_PROVE_ROUTER_ABI,
-              data: item.data as Hex,
-              topics: validTopics as [Hex, ...Hex[]],
-              strict: false,
-            });
+        for (const [jobKey, claim] of decoded.claimsByJobId) {
+          const existing = claimsByJobId.get(jobKey);
+          if (!existing) {
+            claimsByJobId.set(jobKey, claim);
+          } else if (!existing.blockTimestamp && claim.blockTimestamp) {
+            existing.blockTimestamp = claim.blockTimestamp;
+          }
+        }
 
-            if (decoded.eventName === "JobSubmitted") {
-              const args = decoded.args as {
-                jobId?: Hex;
-                proofSystemId?: Hex;
-                caller?: Address;
-                programId?: Hex;
-                minPrice?: bigint;
-                maxPrice?: bigint;
-              };
-              if (!args.jobId || !args.proofSystemId || !args.caller) continue;
-              const lowerId = args.jobId.toLowerCase();
-              if (seenJobIds.has(lowerId)) continue;
-              seenJobIds.add(lowerId);
-
-              rawCandidates.push({
-                jobId: args.jobId,
-                proofSystemId: args.proofSystemId,
-                caller: args.caller,
-                programId: (args.programId ?? ZERO_BYTES32) as Hex,
-                minPrice: args.minPrice,
-                maxPrice: args.maxPrice,
-                txHash: item.transaction_hash ?? item.tx_hash,
-                blockTimestamp: item.block_timestamp,
-              });
-            }
-          } catch {
-            // Non-JobSubmitted event on router; continue scanning
+        for (const [jobKey, fulfill] of decoded.fulfillmentsByJobId) {
+          const existing = fulfillmentsByJobId.get(jobKey);
+          if (!existing) {
+            fulfillmentsByJobId.set(jobKey, fulfill);
+          } else if (!existing.blockTimestamp && fulfill.blockTimestamp) {
+            existing.blockTimestamp = fulfill.blockTimestamp;
           }
         }
       }
@@ -332,27 +357,42 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const pendingMatchedJobs: Array<{
+      job: MarketplaceJob;
+      cand: RawSubmittedCandidate;
+      fulfillMeta?: FulfilledEventMeta;
+    }> = [];
+
     for (
       let offset = 0;
-      offset < rawCandidates.length && onChainJobs.length < TARGET_VALID_ONCHAIN_JOBS;
+      offset < rawCandidates.length && pendingMatchedJobs.length < TARGET_VALID_ONCHAIN_JOBS;
       offset += ENRICH_BATCH_SIZE
     ) {
       const batch = rawCandidates.slice(offset, offset + ENRICH_BATCH_SIZE);
       const enrichedBatch = await Promise.all(
         batch.map(async (cand, batchIdx) => {
           const globalIdx = offset + batchIdx;
-          const psSpec = resolveProofSystemById(cand.proofSystemId);
-          const minPriceHemi = cand.minPrice
-            ? Number(formatUnits(cand.minPrice, 18))
-            : 1.0;
-          const maxPriceHemi = cand.maxPrice
-            ? Number(formatUnits(cand.maxPrice, 18))
-            : Math.max(minPriceHemi * 2, 10.0);
+          const lowerId = cand.jobId.toLowerCase();
+          const claimMeta = claimsByJobId.get(lowerId);
+          const fulfillMeta = fulfillmentsByJobId.get(lowerId);
 
-          let statusLabel: MarketplaceJob["status"] = "Open";
+          const psSpec = resolveProofSystemById(cand.proofSystemId);
+          const minPriceHemi =
+            cand.minPrice !== undefined ? Number(formatUnits(cand.minPrice, 18)) : 1.0;
+          const maxPriceHemi =
+            cand.maxPrice !== undefined
+              ? Number(formatUnits(cand.maxPrice, 18))
+              : Math.max(minPriceHemi * 2, 10.0);
+
+          let statusLabel: MarketplaceJob["status"] = fulfillMeta
+            ? "Verified"
+            : claimMeta
+              ? "Claimed"
+              : "Open";
           let currentOfferHemi = minPriceHemi;
           let settledPriceHemi: number | undefined;
-          let proverAddr: string | null = null;
+          let proverAddr: string | null =
+            fulfillMeta?.prover ?? claimMeta?.prover ?? null;
           let rampUpSecs = 300;
           let elapsedSecs = 60;
           let expectedCycles = 50_000_000;
@@ -380,14 +420,23 @@ export async function GET(request: NextRequest) {
               else statusLabel = "Open";
 
               const auctionPrice = Number(formatUnits(view.currentAuctionPrice, 18));
-              const settled = Number(formatUnits(view.settledPrice, 18));
+              const viewSettled = Number(formatUnits(view.settledPrice, 18));
+              const eventSettled = fulfillMeta?.settledPrice
+                ? Number(formatUnits(fulfillMeta.settledPrice, 18))
+                : claimMeta?.settledPrice
+                  ? Number(formatUnits(claimMeta.settledPrice, 18))
+                  : 0;
+              const effectiveSettled = viewSettled > 0 ? viewSettled : eventSettled;
+
               currentOfferHemi =
                 statusLabel === "Open"
                   ? auctionPrice
-                  : settled > 0
-                    ? settled
+                  : effectiveSettled > 0
+                    ? effectiveSettled
                     : maxPriceHemi;
-              if (settled > 0) settledPriceHemi = Number(settled.toFixed(4));
+              if (effectiveSettled > 0) {
+                settledPriceHemi = Number(effectiveSettled.toFixed(4));
+              }
 
               if (view.prover && view.prover.toLowerCase() !== ZERO_ADDRESS) {
                 proverAddr = view.prover;
@@ -402,6 +451,16 @@ export async function GET(request: NextRequest) {
             isContract =
               codeRes.status === "fulfilled" &&
               Boolean(codeRes.value && codeRes.value !== "0x");
+          } else {
+            const eventSettled = fulfillMeta?.settledPrice
+              ? Number(formatUnits(fulfillMeta.settledPrice, 18))
+              : claimMeta?.settledPrice
+                ? Number(formatUnits(claimMeta.settledPrice, 18))
+                : 0;
+            if (eventSettled > 0) {
+              settledPriceHemi = Number(eventSettled.toFixed(4));
+              currentOfferHemi = eventSettled;
+            }
           }
 
           const progMeta = programMetaMap.get(cand.programId.toLowerCase());
@@ -414,6 +473,7 @@ export async function GET(request: NextRequest) {
           const resolvedElfSource =
             progMeta?.elfSourceType ?? detectElfSource(resolvedElfUri);
 
+          const submittedAtIso = cand.blockTimestamp ?? snapshotIso;
           const job: MarketplaceJob = {
             jobId: cand.jobId,
             shortNumericId: Math.max(
@@ -423,7 +483,7 @@ export async function GET(request: NextRequest) {
             programName:
               progMeta?.name ?? `OnChainProgram (${cand.programId.slice(0, 10)})`,
             programFamily: progMeta?.familyLabel ?? "hemiprove.onchain.v2",
-            requester: cand.caller,
+            requester: cand.caller as Address,
             requesterType: isContract ? "Smart Contract" : "EOA",
             zkvm: psSpec?.backend ?? "risc0",
             proofSystemId: cand.proofSystemId,
@@ -439,22 +499,87 @@ export async function GET(request: NextRequest) {
             elapsedSecs,
             curveType: 0,
             expectedCycles,
+            actualCycles: fulfillMeta?.actualCycles,
             status: statusLabel,
             proverAddress: proverAddr,
-            submittedAtIso: cand.blockTimestamp ?? snapshotIso,
+            settlementSecs: computeSettlementDurationSecs(
+              cand.blockTimestamp,
+              fulfillMeta?.blockTimestamp
+            ),
+            submittedAtIso,
             txHash: cand.txHash,
+            fulfillTxHash: fulfillMeta?.txHash,
             isSimulatedStream: false,
           };
 
-          return job;
+          return { job, cand, fulfillMeta };
         })
       );
 
       for (const item of enrichedBatch) {
-        if (item && onChainJobs.length < TARGET_VALID_ONCHAIN_JOBS) {
-          onChainJobs.push(item);
+        if (item && pendingMatchedJobs.length < TARGET_VALID_ONCHAIN_JOBS) {
+          pendingMatchedJobs.push(item);
         }
       }
+    }
+
+    // Backfill missing block timestamps via deduplicated RPC `getBlock` for RPC-sourced logs
+    if (rpcConnected && pendingMatchedJobs.length > 0) {
+      const missingBlocks = new Set<bigint>();
+      for (const entry of pendingMatchedJobs) {
+        if (!entry.cand.blockTimestamp && entry.cand.blockNumber !== undefined) {
+          missingBlocks.add(entry.cand.blockNumber);
+        }
+        if (
+          entry.fulfillMeta &&
+          !entry.fulfillMeta.blockTimestamp &&
+          entry.fulfillMeta.blockNumber !== undefined
+        ) {
+          missingBlocks.add(entry.fulfillMeta.blockNumber);
+        }
+      }
+
+      if (missingBlocks.size > 0) {
+        const blockIsoMap = new Map<bigint, string>();
+        const targets = Array.from(missingBlocks).slice(0, MAX_BLOCK_TIMESTAMP_LOOKUPS);
+        await Promise.allSettled(
+          targets.map(async (blockNumber) => {
+            const block = await client.getBlock({ blockNumber });
+            blockIsoMap.set(
+              blockNumber,
+              new Date(Number(block.timestamp) * 1_000).toISOString()
+            );
+          })
+        );
+
+        for (const entry of pendingMatchedJobs) {
+          const submittedIso =
+            entry.cand.blockTimestamp ??
+            (entry.cand.blockNumber !== undefined
+              ? blockIsoMap.get(entry.cand.blockNumber)
+              : undefined);
+          if (submittedIso) {
+            entry.job.submittedAtIso = submittedIso;
+          }
+
+          const fulfilledIso =
+            entry.fulfillMeta?.blockTimestamp ??
+            (entry.fulfillMeta?.blockNumber !== undefined
+              ? blockIsoMap.get(entry.fulfillMeta.blockNumber)
+              : undefined);
+
+          if (!entry.job.settlementSecs && submittedIso && fulfilledIso) {
+            entry.job.settlementSecs = computeSettlementDurationSecs(
+              submittedIso,
+              fulfilledIso
+            );
+          }
+        }
+      }
+    }
+
+    for (const entry of pendingMatchedJobs) {
+      onChainJobs.push(entry.job);
     }
   }
 
