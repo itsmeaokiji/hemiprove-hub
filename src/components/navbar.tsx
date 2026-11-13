@@ -220,11 +220,15 @@ export function Navbar() {
         <div className="flex h-full shrink-0 items-center">
           <Link
             href="/"
+            title="Independent, unofficial open-source community workbench for hemiProve — not affiliated with Hemi Labs"
             className="flex h-8 items-center border-r border-[#232320] pr-2.5 font-mono text-[11px] font-semibold tracking-tight text-[#EDEDEC] sm:h-9 sm:pr-4 sm:text-sm md:h-12 md:pr-5"
           >
             <span>HEMIPROVE</span>
             <span className="mx-1 sm:mx-1.5 text-[#63635E]">{"//"}</span>
             <span className="text-[#EDEDEC]">HUB</span>
+            <span className="ml-2 hidden rounded-[2px] border border-[#232320] bg-[#0B0B0A] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-[#9A9A94] xl:inline-block">
+              COMMUNITY
+            </span>
           </Link>
 
           <nav className="hidden h-12 items-center md:flex">

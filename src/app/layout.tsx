@@ -13,9 +13,9 @@ import { Navbar } from "@/components/navbar";
 import { OnboardingStrip } from "@/components/onboarding-strip";
 
 export const metadata: Metadata = {
-  title: "HEMIPROVE // HUB — ZK Marketplace Telemetry, GPU zkOP/s Datasheet & Simulate Studio",
+  title: "HEMIPROVE // HUB — Community ZK Marketplace Telemetry, GPU zkOP/s & Simulate Studio",
   description:
-    "Precision hardware datasheet, multi-vendor GPU zkOP/s benchmark workbench (CUDA, ROCm/HIP, Intel SYCL), and zkminer simulate sizing diagnostic studio for Hemi Network's ZK proving marketplace.",
+    "Independent, unofficial open-source community workbench, multi-vendor GPU zkOP/s benchmark datasheet, and zkminer simulate sizing diagnostic studio for Hemi Network's hemiProve marketplace. Not affiliated with Hemi Labs.",
 };
 
 export default function RootLayout({
@@ -30,13 +30,16 @@ export default function RootLayout({
           <Navbar />
           <OnboardingStrip />
           <main className="w-full flex-1 bg-[#0B0B0A]">{children}</main>
-          <footer className="flex h-8 flex-wrap items-center justify-between border-t border-[#232320] bg-[#0B0B0A] px-4 font-mono text-[11px] tabular-nums text-[#63635E]">
-            <div className="flex items-center gap-3">
+          <footer className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-[#232320] bg-[#0B0B0A] px-4 py-1.5 sm:py-0 font-mono text-[11px] tabular-nums text-[#63635E]">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
               <span className="text-[#9A9A94]">HEMIPROVE // HUB</span>
-              <span>|</span>
-              <span>STACK: ZKMARKET@C8333AA</span>
-              <span className="hidden sm:inline">|</span>
-              <span className="hidden sm:inline">PROTOCOL: V12 (RISC0-PUBLIC-V3)</span>
+              <span className="rounded-[2px] border border-[#232320] bg-[#111110] px-1.5 py-0.5 text-[10px] text-[#9A9A94]">
+                UNOFFICIAL COMMUNITY WORKBENCH
+              </span>
+              <span className="hidden md:inline">|</span>
+              <span className="hidden md:inline">STACK: ZKMARKET@C8333AA</span>
+              <span className="hidden xl:inline">|</span>
+              <span className="hidden xl:inline">PROTOCOL: V12 (RISC0-PUBLIC-V3)</span>
             </div>
             <div className="flex items-center gap-4">
               <a

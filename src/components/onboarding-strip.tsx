@@ -19,7 +19,7 @@ export function OnboardingStrip() {
           QUICKSTART //
         </span>
         <span>
-          HemiProve matches ZK proof requests with staked GPU provers via escalating Dutch auctions.
+          Unofficial community workbench for hemiProve — explore live ZK auctions, GPU ROI &amp; sizing.
         </span>
       </div>
 

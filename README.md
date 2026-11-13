@@ -6,9 +6,11 @@
 [![TypeScript 5.8](https://img.shields.io/badge/TypeScript-5.8_Strict-111110.svg)](https://www.typescriptlang.org/)
 [![Hemi Sepolia 743111](https://img.shields.io/badge/Hemi_Sepolia-743111_Live-10B981.svg)](https://testnet.explorer.hemi.xyz/address/0xE1a492Dc6D57fCC2B6deb5B64087E69666cA470e)
 
-**HemiProve Hub** is an open-source telemetry explorer, multi-vendor GPU `zkOP/s` benchmark datasheet, and pre-flight job sizing studio for **hemiProve** — Hemi Network's decentralized, prover-agnostic ZK proving marketplace.
+**HemiProve Hub** is an **independent, unofficial open-source community workbench** — featuring a telemetry explorer, multi-vendor GPU `zkOP/s` benchmark datasheet, and pre-flight job sizing studio for **hemiProve** (Hemi Network's decentralized, prover-agnostic ZK proving marketplace).
 
 Built directly against the ABIs, deployment pins (`zkmarket@c8333aa`), and Protocol 12 sizing rules in [`hemilabs/zk-miner`](https://github.com/hemilabs/zk-miner), it gives **protocol engineers**, **dApp requesters**, and **GPU miners** a unified workbench to inspect auctions, compare NVIDIA/AMD/Intel hardware efficiency, and model guest ELF workloads before posting or claiming on-chain jobs.
+
+> **Independent Community Tool:** This project is third-party open-source software built for the Hemi ecosystem and is **not** affiliated with, endorsed by, or maintained by Hemi Labs. Official protocol source code, CLI binaries, and prover daemons live at [`hemilabs/zk-miner`](https://github.com/hemilabs/zk-miner).
 
 **[Launch Live Workbench ->](https://hemiprove-hub.vercel.app)** · **[Architecture & Math Spec ->](./ARCHITECTURE.md)** · **[Design System ->](./DESIGN.md)**
 
