@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import seedBenchmarksJson from "@/data/seed-benchmarks.json";
 import { useHemiNetwork } from "@/components/providers";
@@ -20,9 +20,36 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { cn, formatCycleRate, formatZkops } from "@/lib/utils";
 
 const LOCAL_STORAGE_BENCHMARKS_KEY = "hemiprove-hub:community-benchmarks:v1";
+const SESSION_STORAGE_BENCHMARKS_STATE_KEY = "hemiprove-hub:benchmarks-session:v1";
 
 type SortKey = "zkops" | "efficiency" | "chacha" | "sha256";
 type RailMode = "roi" | "submit";
+
+interface BenchmarksSessionState {
+  railMode: RailMode;
+  mobileView: "table" | "rail";
+  vendorFilter: "ALL" | GpuVendor;
+  osFilter: "ALL" | HostOs;
+  zkvmFilter: "ALL" | BenchmarkZkVm;
+  sortBy: SortKey;
+  searchQuery: string;
+  selectedGpuId: string;
+  cardCount: number;
+  electricityRateKwh: number;
+  dailyRewardPoolHemi: number;
+  networkTotalMzkops: number;
+  hemiPriceUsd: number;
+  hemiPriceInput: string;
+  isCustomPrice: boolean;
+  rawInput: string;
+  overrideModel: string;
+  overrideVendor: "" | GpuVendor;
+  overrideOs: HostOs;
+  overrideVram: string;
+  overrideTdp: string;
+  overrideMsrp: string;
+  submittedBy: string;
+}
 
 function formatHemiUsdInput(usd: number): string {
   if (usd >= 1) return Number(usd.toFixed(4)).toString();
@@ -141,8 +168,72 @@ export default function BenchmarksPage() {
   const [overrideMsrp, setOverrideMsrp] = useState("");
   const [submittedBy, setSubmittedBy] = useState("");
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
+  const hasRestoredSessionRef = useRef(false);
 
   useEffect(() => {
+    try {
+      const savedSessionRaw = window.sessionStorage.getItem(
+        SESSION_STORAGE_BENCHMARKS_STATE_KEY
+      );
+      if (savedSessionRaw) {
+        const s = JSON.parse(savedSessionRaw) as Partial<BenchmarksSessionState>;
+        if (s.railMode === "roi" || s.railMode === "submit") setRailMode(s.railMode);
+        if (s.mobileView === "table" || s.mobileView === "rail")
+          setMobileView(s.mobileView);
+        if (s.vendorFilter) setVendorFilter(s.vendorFilter);
+        if (s.osFilter) setOsFilter(s.osFilter);
+        if (s.zkvmFilter) setZkvmFilter(s.zkvmFilter);
+        if (s.sortBy) setSortBy(s.sortBy);
+        if (typeof s.searchQuery === "string") setSearchQuery(s.searchQuery);
+        if (typeof s.selectedGpuId === "string" && s.selectedGpuId)
+          setSelectedGpuId(s.selectedGpuId);
+        if (typeof s.cardCount === "number" && Number.isFinite(s.cardCount))
+          setCardCount(s.cardCount);
+        if (
+          typeof s.electricityRateKwh === "number" &&
+          Number.isFinite(s.electricityRateKwh)
+        )
+          setElectricityRateKwh(s.electricityRateKwh);
+        if (
+          typeof s.dailyRewardPoolHemi === "number" &&
+          Number.isFinite(s.dailyRewardPoolHemi)
+        )
+          setDailyRewardPoolHemi(s.dailyRewardPoolHemi);
+        if (
+          typeof s.networkTotalMzkops === "number" &&
+          Number.isFinite(s.networkTotalMzkops)
+        )
+          setNetworkTotalMzkops(s.networkTotalMzkops);
+        if (typeof s.isCustomPrice === "boolean") {
+          setIsCustomPrice(s.isCustomPrice);
+          if (
+            s.isCustomPrice &&
+            typeof s.hemiPriceUsd === "number" &&
+            Number.isFinite(s.hemiPriceUsd)
+          ) {
+            setHemiPriceUsd(s.hemiPriceUsd);
+            setHemiPriceInput(
+              typeof s.hemiPriceInput === "string"
+                ? s.hemiPriceInput
+                : String(s.hemiPriceUsd)
+            );
+          }
+        }
+        if (typeof s.rawInput === "string") setRawInput(s.rawInput);
+        if (typeof s.overrideModel === "string") setOverrideModel(s.overrideModel);
+        if (s.overrideVendor !== undefined) setOverrideVendor(s.overrideVendor);
+        if (s.overrideOs) setOverrideOs(s.overrideOs);
+        if (typeof s.overrideVram === "string") setOverrideVram(s.overrideVram);
+        if (typeof s.overrideTdp === "string") setOverrideTdp(s.overrideTdp);
+        if (typeof s.overrideMsrp === "string") setOverrideMsrp(s.overrideMsrp);
+        if (typeof s.submittedBy === "string") setSubmittedBy(s.submittedBy);
+      }
+    } catch {
+      // ignore
+    } finally {
+      hasRestoredSessionRef.current = true;
+    }
+
     try {
       const saved = window.localStorage.getItem(LOCAL_STORAGE_BENCHMARKS_KEY);
       if (saved) {
@@ -177,6 +268,67 @@ export default function BenchmarksPage() {
         // ignore offline
       });
   }, []);
+
+  useEffect(() => {
+    if (!hasRestoredSessionRef.current) return;
+    try {
+      const payload: BenchmarksSessionState = {
+        railMode,
+        mobileView,
+        vendorFilter,
+        osFilter,
+        zkvmFilter,
+        sortBy,
+        searchQuery,
+        selectedGpuId,
+        cardCount,
+        electricityRateKwh,
+        dailyRewardPoolHemi,
+        networkTotalMzkops,
+        hemiPriceUsd,
+        hemiPriceInput,
+        isCustomPrice,
+        rawInput,
+        overrideModel,
+        overrideVendor,
+        overrideOs,
+        overrideVram,
+        overrideTdp,
+        overrideMsrp,
+        submittedBy,
+      };
+      window.sessionStorage.setItem(
+        SESSION_STORAGE_BENCHMARKS_STATE_KEY,
+        JSON.stringify(payload)
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [
+    railMode,
+    mobileView,
+    vendorFilter,
+    osFilter,
+    zkvmFilter,
+    sortBy,
+    searchQuery,
+    selectedGpuId,
+    cardCount,
+    electricityRateKwh,
+    dailyRewardPoolHemi,
+    networkTotalMzkops,
+    hemiPriceUsd,
+    hemiPriceInput,
+    isCustomPrice,
+    rawInput,
+    overrideModel,
+    overrideVendor,
+    overrideOs,
+    overrideVram,
+    overrideTdp,
+    overrideMsrp,
+    submittedBy,
+  ]);
 
   const allEntries = useMemo<BenchmarkEntry[]>(() => {
     return [...(seedBenchmarksJson as BenchmarkEntry[]), ...communityEntries];

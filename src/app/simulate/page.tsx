@@ -22,6 +22,22 @@ import { cn, shortenHex } from "@/lib/utils";
 
 type ArtifactTab = "json" | "solidity" | "viem";
 
+const SESSION_STORAGE_SIMULATE_KEY = "hemiprove-hub:simulate-session:v1";
+
+interface SimulateSessionState {
+  activePresetId: string | null;
+  elfUrl: string;
+  targetZkvm: ZkVmBackend;
+  stdin: string;
+  singleRun: boolean;
+  declaredCycles?: number;
+  jobIdHint?: string;
+  programIdHint?: string;
+  report: SimulateReportJson;
+  artifactTab: ArtifactTab;
+  mobileSimPane: "console" | "report";
+}
+
 const PRESET_DISPLAY_LABELS: Record<
   string,
   { title: string; tag: string; isAlert?: boolean }
@@ -83,6 +99,7 @@ export default function SimulateStudioPage() {
   const [artifactTab, setArtifactTab] = useState<ArtifactTab>("solidity");
   const [copiedArtifact, setCopiedArtifact] = useState(false);
   const [mobileSimPane, setMobileSimPane] = useState<"console" | "report">("console");
+  const hasRestoredSessionRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -126,6 +143,7 @@ export default function SimulateStudioPage() {
   );
 
   // Support full job context deep links from `/` (`/simulate?elf=...&zkvm=...&cycles=...&jobId=...&program=...`)
+  // or restore previous session state when switching back via navbar
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -152,6 +170,7 @@ export default function SimulateStudioPage() {
         setJobIdHint(qJobId);
         setProgramIdHint(qProgram);
         setMobileSimPane("report");
+        hasRestoredSessionRef.current = true;
 
         executeSimulation({
           elfUrl: qElf,
@@ -162,11 +181,85 @@ export default function SimulateStudioPage() {
           jobId: qJobId,
           programId: qProgram,
         });
+        return;
+      }
+
+      const savedRaw = window.sessionStorage.getItem(SESSION_STORAGE_SIMULATE_KEY);
+      if (savedRaw) {
+        const saved = JSON.parse(savedRaw) as Partial<SimulateSessionState>;
+        if (typeof saved.elfUrl === "string" && saved.elfUrl.length > 0) {
+          setActivePresetId(saved.activePresetId ?? null);
+          setElfUrl(saved.elfUrl);
+          if (
+            saved.targetZkvm === "sp1" ||
+            saved.targetZkvm === "risc0" ||
+            saved.targetZkvm === "openvm"
+          ) {
+            setTargetZkvm(saved.targetZkvm);
+          }
+          if (typeof saved.stdin === "string") setStdin(saved.stdin);
+          if (typeof saved.singleRun === "boolean") setSingleRun(saved.singleRun);
+          setDeclaredCycles(saved.declaredCycles);
+          setJobIdHint(saved.jobIdHint);
+          setProgramIdHint(saved.programIdHint);
+          if (saved.report && typeof saved.report.cycles === "string") {
+            setReport(saved.report);
+          }
+          if (
+            saved.artifactTab === "json" ||
+            saved.artifactTab === "solidity" ||
+            saved.artifactTab === "viem"
+          ) {
+            setArtifactTab(saved.artifactTab);
+          }
+          if (saved.mobileSimPane === "console" || saved.mobileSimPane === "report") {
+            setMobileSimPane(saved.mobileSimPane);
+          }
+        }
       }
     } catch {
       // ignore
+    } finally {
+      hasRestoredSessionRef.current = true;
     }
   }, [executeSimulation]);
+
+  useEffect(() => {
+    if (!hasRestoredSessionRef.current) return;
+    try {
+      const payload: SimulateSessionState = {
+        activePresetId,
+        elfUrl,
+        targetZkvm,
+        stdin,
+        singleRun,
+        declaredCycles,
+        jobIdHint,
+        programIdHint,
+        report,
+        artifactTab,
+        mobileSimPane,
+      };
+      window.sessionStorage.setItem(
+        SESSION_STORAGE_SIMULATE_KEY,
+        JSON.stringify(payload)
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [
+    activePresetId,
+    elfUrl,
+    targetZkvm,
+    stdin,
+    singleRun,
+    declaredCycles,
+    jobIdHint,
+    programIdHint,
+    report,
+    artifactTab,
+    mobileSimPane,
+  ]);
 
   const handleLoadPreset = (preset: SimulatePreset) => {
     setActivePresetId(preset.id);

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, Check, Copy } from "lucide-react";
@@ -22,6 +22,16 @@ import {
 } from "@/lib/marketplace-data";
 import { runDeterministicSimulation } from "@/lib/simulate-engine";
 import { cn, formatDurationSecs, shortenHex } from "@/lib/utils";
+
+const SESSION_STORAGE_MARKETPLACE_KEY = "hemiprove-hub:marketplace-session:v1";
+
+interface MarketplaceSessionState {
+  statusFilter: "ALL" | JobStatusLabel;
+  zkvmFilter: "ALL" | ZkVmBackend;
+  searchQuery: string;
+  selectedJobId: string | null;
+  mobilePane: "table" | "inspector";
+}
 
 function renderAsciiBlocks(ratio: number, totalSegments = 10): string {
   const clamped = Math.max(0, Math.min(1, ratio));
@@ -73,6 +83,62 @@ export default function MarketplacePage() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [mobilePane, setMobilePane] = useState<"table" | "inspector">("table");
   const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const hasRestoredSessionRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      const savedRaw = window.sessionStorage.getItem(SESSION_STORAGE_MARKETPLACE_KEY);
+      if (savedRaw) {
+        const s = JSON.parse(savedRaw) as Partial<MarketplaceSessionState>;
+        if (
+          s.statusFilter === "ALL" ||
+          s.statusFilter === "Open" ||
+          s.statusFilter === "Claimed" ||
+          s.statusFilter === "Verified"
+        ) {
+          setStatusFilter(s.statusFilter);
+        }
+        if (
+          s.zkvmFilter === "ALL" ||
+          s.zkvmFilter === "sp1" ||
+          s.zkvmFilter === "risc0" ||
+          s.zkvmFilter === "openvm"
+        ) {
+          setZkvmFilter(s.zkvmFilter);
+        }
+        if (typeof s.searchQuery === "string") setSearchQuery(s.searchQuery);
+        if (typeof s.selectedJobId === "string" || s.selectedJobId === null) {
+          setSelectedJobId(s.selectedJobId);
+        }
+        if (s.mobilePane === "table" || s.mobilePane === "inspector") {
+          setMobilePane(s.mobilePane);
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      hasRestoredSessionRef.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasRestoredSessionRef.current) return;
+    try {
+      const payload: MarketplaceSessionState = {
+        statusFilter,
+        zkvmFilter,
+        searchQuery,
+        selectedJobId,
+        mobilePane,
+      };
+      window.sessionStorage.setItem(
+        SESSION_STORAGE_MARKETPLACE_KEY,
+        JSON.stringify(payload)
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [statusFilter, zkvmFilter, searchQuery, selectedJobId, mobilePane]);
 
   useEffect(() => {
     const interval = setInterval(() => {
