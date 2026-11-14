@@ -73,19 +73,18 @@ export function Navbar() {
   const [copiedRouter, setCopiedRouter] = useState(false);
   const [apiLatencyMs, setApiLatencyMs] = useState<number>(42);
 
-  const modeKey = liveStreamEnabled ? "demo" : "live";
   const { data: telemetry } = useQuery<MarketplaceApiResponse>({
-    queryKey: ["marketplace", networkKey, modeKey],
+    queryKey: ["marketplace", networkKey],
     queryFn: async () => {
       const t0 = performance.now();
-      const res = await fetch(`/api/marketplace?network=${networkKey}&mode=${modeKey}`);
+      const res = await fetch(`/api/marketplace?network=${networkKey}`);
       const elapsed = Math.max(8, Math.round(performance.now() - t0));
       setApiLatencyMs(elapsed);
       if (!res.ok) throw new Error("Telemetry fetch failed");
       return res.json();
     },
     enabled: hasHydrated,
-    refetchInterval: 20_000,
+    refetchInterval: pathname === "/" ? 20_000 : false,
   });
 
   const copyRouter = () => {

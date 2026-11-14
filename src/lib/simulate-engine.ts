@@ -63,7 +63,7 @@ export interface SimulateReportJson {
   journalBytes: number;
   journalHash: string;
   publicValuesHex: string;
-  binding: "satisfied" | "none" | "fails";
+  binding: "satisfied" | "none" | "fails" | "unchecked";
   proven: "matches" | "differs" | "unknown";
   hostInput: boolean;
   randomReads: number;
@@ -460,7 +460,7 @@ export function runDeterministicSimulation(
       proven: sizeCheck === "differs" ? "differs" : "matches",
       hostInput: defaultRow.randomReads > 0,
       randomReads: defaultRow.randomReads,
-      sdkVersion: "risc0-zkvm 3.0.3",
+      sdkVersion: "risc0-zkvm 3.0.6 (release-3.1 / groth16 v0.2.0)",
       zkminerVersion: "0.4.2",
       protocolVersion: 12,
       executionEngine: "deterministic-analyzer",
@@ -612,5 +612,341 @@ export function runDeterministicSimulation(
       estimatedProveSecsRtx4090: proveSecs,
     },
     warnings,
+  };
+}
+
+function pickNonEmptyString(
+  raw: Record<string, unknown>,
+  keys: string[]
+): string | undefined {
+  for (const key of keys) {
+    const val = raw[key];
+    if (typeof val === "string" && val.trim().length > 0) {
+      return val.trim();
+    }
+  }
+  return undefined;
+}
+
+function pickFiniteNumber(
+  raw: Record<string, unknown>,
+  keys: string[]
+): number | undefined {
+  for (const key of keys) {
+    const val = raw[key];
+    if (typeof val === "number" && Number.isFinite(val) && val >= 0) {
+      return val;
+    }
+    if (typeof val === "string" && /^\d+(\.\d+)?$/.test(val.trim())) {
+      return Number(val.trim());
+    }
+  }
+  return undefined;
+}
+
+function pickCycleString(
+  raw: Record<string, unknown>,
+  keys: string[]
+): string | undefined {
+  for (const key of keys) {
+    const val = raw[key];
+    if (typeof val === "number" && Number.isFinite(val) && val >= 0) {
+      return String(Math.round(val));
+    }
+    if (typeof val === "string" && /^\d+$/.test(val.trim())) {
+      return val.trim();
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Merges a JSON report emitted by `zkminer simulate <jobId>` (`crates/zkminer-cli/src/commands/simulate.rs`,
+ * `REPORT_SCHEMA = 1`, PR #31 / PR #32 `c4ba622` / PR #34 `17b0211`) onto a deterministic baseline report
+ * and recomputes all dependent sizing, VRAM tier, pricing, and 7-segment fields.
+ */
+export function mergeCliSimulateReport(
+  base: SimulateReportJson,
+  raw: Record<string, unknown>
+): SimulateReportJson {
+  const outcomeVal = typeof raw.outcome === "string" ? raw.outcome.trim().toLowerCase() : undefined;
+  const rawCycles = pickCycleString(raw, ["cycles"]);
+  const rawReason = pickNonEmptyString(raw, ["reason"]);
+
+  // If the CLI returned a non-measured outcome without a cycle count (e.g. `no_worker`, `no_program`, `unavailable`),
+  // preserve the deterministic pre-flight sizing and surface the CLI reason in `warnings`.
+  if (
+    outcomeVal &&
+    outcomeVal !== "measured" &&
+    !rawCycles &&
+    outcomeVal !== "too_heavy" &&
+    outcomeVal !== "not_served"
+  ) {
+    const fallbackNote = `zkminer simulate reported outcome="${outcomeVal}"${
+      rawReason ? ` (${rawReason})` : ""
+    } — displaying deterministic pre-flight sizing model.`;
+    return {
+      ...base,
+      warnings: base.warnings.includes(fallbackNote)
+        ? base.warnings
+        : [fallbackNote, ...base.warnings],
+    };
+  }
+
+  const outcome: SimulateReportJson["outcome"] =
+    outcomeVal === "measured" || outcomeVal === "too_heavy" || outcomeVal === "not_served"
+      ? outcomeVal
+      : base.outcome;
+
+  // Map upstream `sizeCheck` (`"same" | "differs" | "skipped"`) to HemiProve Hub's canonical labels
+  const sizeCheckRaw = pickNonEmptyString(raw, ["sizeCheck", "size_check"]);
+  const sizeCheck: SimulateReportJson["sizeCheck"] =
+    sizeCheckRaw === "same" || sizeCheckRaw === "consistent"
+      ? "consistent"
+      : sizeCheckRaw === "differs"
+        ? "differs"
+        : sizeCheckRaw === "skipped" || sizeCheckRaw === "skipped_single_run"
+          ? "skipped_single_run"
+          : base.sizeCheck;
+
+  const bindingVal = pickNonEmptyString(raw, ["binding"]);
+  const binding: SimulateReportJson["binding"] =
+    bindingVal === "satisfied" ||
+    bindingVal === "none" ||
+    bindingVal === "fails" ||
+    bindingVal === "unchecked"
+      ? bindingVal
+      : base.binding;
+
+  const provenVal = pickNonEmptyString(raw, ["proven"]);
+  const proven: SimulateReportJson["proven"] =
+    provenVal === "matches" || provenVal === "differs" || provenVal === "unknown"
+      ? provenVal
+      : base.proven;
+
+  const programCheckVal = pickNonEmptyString(raw, ["programCheck", "program_check"]);
+  const programCheck: SimulateReportJson["programCheck"] =
+    programCheckVal === "image_id" ||
+    programCheckVal === "vkey" ||
+    programCheckVal === "exe_commit"
+      ? programCheckVal
+      : base.programCheck;
+
+  const hostInputRaw = raw.hostInput ?? raw.host_input;
+  const randomReads =
+    pickFiniteNumber(raw, [
+      "hostInputReads",
+      "host_input_reads",
+      "randomReads",
+      "random_reads",
+    ]) ?? base.randomReads;
+  const hostInput =
+    typeof hostInputRaw === "boolean" ? hostInputRaw : randomReads > 0 ? true : base.hostInput;
+
+  const po2Raw = pickFiniteNumber(raw, ["po2"]);
+  const po2 =
+    po2Raw !== undefined && po2Raw >= 16 && po2Raw <= 22 ? Math.round(po2Raw) : base.po2;
+
+  const cycles = rawCycles ?? base.cycles;
+  const totalCyclesNum = Math.max(1, Number(cycles) || Number(base.cycles));
+
+  const explicitKeccakCharges = pickCycleString(raw, [
+    "keccakCycles",
+    "keccak_cycles",
+    "keccakCharges",
+    "keccak_charges",
+  ]);
+  const explicitKeccakRequests = pickFiniteNumber(raw, [
+    "keccakRequests",
+    "keccak_requests",
+  ]);
+
+  const keccakRequests =
+    explicitKeccakRequests !== undefined
+      ? Math.round(explicitKeccakRequests)
+      : explicitKeccakCharges !== undefined
+        ? Math.round(Number(explicitKeccakCharges) / KECCAK_CHARGE_PER_REQUEST)
+        : base.keccakRequests;
+
+  const keccakCharges =
+    explicitKeccakCharges ??
+    (explicitKeccakRequests !== undefined
+      ? String(Math.round(explicitKeccakRequests) * KECCAK_CHARGE_PER_REQUEST)
+      : base.keccakCharges);
+
+  const explicitGuestCycles = pickCycleString(raw, [
+    "userCycles",
+    "user_cycles",
+    "guestCycles",
+    "guest_cycles",
+  ]);
+
+  let guestCycles = explicitGuestCycles ?? base.guestCycles;
+  let paddingCycles =
+    pickCycleString(raw, ["paddingCycles", "padding_cycles"]) ?? base.paddingCycles;
+
+  if (base.backend === "risc0") {
+    const keccakNum = Number(keccakCharges) || 0;
+    if (explicitGuestCycles !== undefined) {
+      const guestNum = Number(explicitGuestCycles);
+      paddingCycles = String(Math.max(0, totalCyclesNum - guestNum - keccakNum));
+    } else if (rawCycles !== undefined) {
+      const paddedExec = Math.max(65_536, totalCyclesNum - keccakNum);
+      const inferredGuest = Math.max(1, Math.round(paddedExec * 0.92));
+      guestCycles = String(inferredGuest);
+      paddingCycles = String(Math.max(0, paddedExec - inferredGuest));
+    }
+  } else if (rawCycles !== undefined && explicitGuestCycles === undefined) {
+    guestCycles = rawCycles;
+    paddingCycles = "0";
+  }
+
+  const journalHash =
+    pickNonEmptyString(raw, ["journalHash", "journal_hash"]) ?? base.journalHash;
+
+  // Recompute segmentAudit, VRAM tier, and pricing recommendation when cycles/sizeCheck change
+  let segmentAudit = base.segmentAudit;
+  let vramTierRecommendation = base.vramTierRecommendation;
+  let peakVramMib =
+    pickFiniteNumber(raw, ["peakVramMib", "peak_vram_mib"]) ?? base.peakVramMib;
+  let pricingRecommendation = base.pricingRecommendation;
+
+  if (base.backend === "risc0") {
+    const fullAudit = buildRisc0SegmentTable({
+      baseGuestCycles: Number(guestCycles) || Number(base.guestCycles),
+      baseKeccakRequests: keccakRequests,
+      baseJournalHash: journalHash,
+      adversarialBranch: sizeCheck === "differs",
+    });
+    const activePo2 = po2 ?? 20;
+    const matchedRow = fullAudit.find((r) => r.po2 === activePo2) ?? fullAudit[4];
+    segmentAudit = sizeCheck === "skipped_single_run" ? [matchedRow] : fullAudit;
+    if (raw.peakVramMib === undefined && raw.peak_vram_mib === undefined) {
+      peakVramMib = matchedRow.peakVramMib;
+    }
+
+    const minVramGb: 12 | 16 | 24 = totalCyclesNum > 140_000_000 ? 24 : 16;
+    vramTierRecommendation =
+      minVramGb === 24
+        ? {
+            minVramGb: 24,
+            tierLabel: "24 GiB+ Flagship Tier (Resident Groth16 SRS)",
+            hardwareExamples: "RTX 4090 (24GB), RX 7900 XTX (24GB), RTX 5090 (32GB)",
+            rationale:
+              "Heavy multi-segment RISC Zero + Keccak coprocessor batch fits with 3.45 GB Groth16 SRS cached in VRAM (`>= 20 GiB` threshold).",
+          }
+        : {
+            minVramGb: 16,
+            tierLabel: `16 GiB Consumer GPU Standard (\`po2=${activePo2}\`)`,
+            hardwareExamples:
+              "RX 9070 XT (16GB), RTX 5080 (16GB), RTX 5060 Ti (16GB), Arc A770 (16GB)",
+            rationale:
+              "Clears `zkminer` 14 GiB default gate (`12,436 MiB` peak at `po2=20`); 12 GB cards require `zkminer benchmark --calibrate` (`po2=19`).",
+          };
+
+    const proveSecs4090 = Number((totalCyclesNum / 2_017_000 + 2.02).toFixed(1));
+    const minPriceHemi = Number(Math.max(1.5, (totalCyclesNum / 15_000_000) * 1.15).toFixed(2));
+    const maxPriceHemi = Number((minPriceHemi * 3.6).toFixed(2));
+    pricingRecommendation = {
+      minPriceHemi,
+      maxPriceHemi,
+      rampUpPeriodSecs: 240,
+      fulfillmentTimeoutSecs: Math.max(300, Math.ceil(proveSecs4090 * 8)),
+      estimatedProveSecsRtx4090: proveSecs4090,
+    };
+  } else if (base.backend === "sp1") {
+    const highTier = totalCyclesNum > 134_217_728;
+    if (raw.peakVramMib === undefined && raw.peak_vram_mib === undefined) {
+      peakVramMib = highTier ? 17_766 : 15_092;
+    }
+    vramTierRecommendation = highTier
+      ? {
+          minVramGb: 24,
+          tierLabel: "24 GiB+ SP1 High-Threshold Worker (`268M` elements)",
+          hardwareExamples: "RTX 4090 (24GB), RTX 5090 (32GB), RX 7900 XTX (24GB)",
+          rationale:
+            "Exceeds 134,217,728 element threshold; `sp1-gpu-server` allocates ~17,766 MiB peak device memory.",
+        }
+      : {
+          minVramGb: 16,
+          tierLabel: "16 GiB SP1 Standard Worker (`134M` elements)",
+          hardwareExamples: "RX 9070 XT (16GB), RTX 5080 (16GB), RTX 5060 Ti (16GB)",
+          rationale:
+            "Fits inside `sp1-gpu-server` 134M element tier (`15,092 MiB` peak VRAM on CUDA 12.9 & ROCm 10.1).",
+        };
+    const proveSecs4090 = Number((totalCyclesNum / 3_085_000 + 2.02).toFixed(1));
+    const minPriceHemi = Number(Math.max(1.4, (totalCyclesNum / 16_000_000) * 1.1).toFixed(2));
+    const maxPriceHemi = Number((minPriceHemi * 3.5).toFixed(2));
+    pricingRecommendation = {
+      minPriceHemi,
+      maxPriceHemi,
+      rampUpPeriodSecs: 300,
+      fulfillmentTimeoutSecs: Math.max(300, Math.ceil(proveSecs4090 * 8)),
+      estimatedProveSecsRtx4090: proveSecs4090,
+    };
+  }
+
+  const rawWarnings = Array.isArray(raw.warnings)
+    ? raw.warnings.filter((w): w is string => typeof w === "string")
+    : [...base.warnings];
+
+  if (rawReason && outcome !== "measured") {
+    const reasonMsg = `zkminer simulate (${outcome}): ${rawReason}`;
+    if (!rawWarnings.includes(reasonMsg)) {
+      rawWarnings.unshift(reasonMsg);
+    }
+  }
+
+  return {
+    ...base,
+    rule: pickNonEmptyString(raw, ["sysRandRule", "sys_rand_rule", "rule"]) ?? base.rule,
+    outcome,
+    retryable: typeof raw.retryable === "boolean" ? raw.retryable : base.retryable,
+    programId: pickNonEmptyString(raw, ["programId", "program_id"]) ?? base.programId,
+    descriptorHash:
+      pickNonEmptyString(raw, ["descriptorHash", "descriptor_hash"]) ?? base.descriptorHash,
+    elfHash: pickNonEmptyString(raw, ["elfHash", "elf_hash"]) ?? base.elfHash,
+    elfBytes: pickFiniteNumber(raw, ["elfBytes", "elf_bytes"]) ?? base.elfBytes,
+    inputHash: pickNonEmptyString(raw, ["inputHash", "input_hash"]) ?? base.inputHash,
+    inputBytes:
+      pickFiniteNumber(raw, ["inputBytes", "input_bytes", "stdinBytes", "stdin_bytes"]) ??
+      base.inputBytes,
+    programCheck,
+    programCheckSecs:
+      pickFiniteNumber(raw, ["programCheckSecs", "program_check_secs"]) ??
+      base.programCheckSecs,
+    cycles,
+    guestCycles,
+    paddingCycles,
+    keccakRequests,
+    keccakCharges,
+    po2,
+    sizeCheck,
+    executeSecs:
+      pickFiniteNumber(raw, ["executeSecs", "execute_secs"]) ?? base.executeSecs,
+    peakHostBytes:
+      pickFiniteNumber(raw, ["peakHostBytes", "peak_host_bytes"]) ?? base.peakHostBytes,
+    peakVramMib,
+    vramTierRecommendation,
+    journalBytes:
+      pickFiniteNumber(raw, ["journalBytes", "journal_bytes"]) ?? base.journalBytes,
+    journalHash,
+    publicValuesHex:
+      pickNonEmptyString(raw, ["publicValuesHex", "public_values_hex"]) ??
+      base.publicValuesHex,
+    binding,
+    proven,
+    hostInput,
+    randomReads,
+    sdkVersion: pickNonEmptyString(raw, ["sdkVersion", "sdk_version"]) ?? base.sdkVersion,
+    zkminerVersion:
+      pickNonEmptyString(raw, ["zkminerVersion", "zkminer_version"]) ??
+      base.zkminerVersion,
+    protocolVersion:
+      pickFiniteNumber(raw, ["protocolVersion", "protocol_version"]) ?? base.protocolVersion,
+    pricingRecommendation,
+    segmentAudit,
+    warnings: rawWarnings,
+    executionEngine: "zkminer-cli-binary",
   };
 }

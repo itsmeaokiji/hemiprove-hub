@@ -130,7 +130,7 @@ In `zkmarket@c8333aa` (mirrored from `crates/zkminer-chain/src/deployment.rs`), 
 - **Mainnet (`43111`):** While `NEXT_PUBLIC_MAINNET_HEMIPROVE_ROUTER` is unset, `deployment.router = null`. The UI renders `ROUTER: STAGED (PRE-DEPLOYMENT)`, suppresses broken Mainnet router links so Sepolia addresses never leak onto `explorer.hemi.xyz`, sets verifiers to `RISC0: STAGED`, `SP1: STAGED`, `OPENVM: 743111-ONLY` (per `INTERACTION_GUIDE.md` §3), and emits `address(0)` + explicit staged-deployment guards into generated Solidity/Viem code so Sepolia router addresses never mix with Mainnet HEMI.
 
 ### 3.3 Multi-Stage On-Chain Discovery Pipeline (`GET /api/marketplace`)
-When querying an active deployment, `src/app/api/marketplace/route.ts` caches responses per `${network}:${mode}` for `15s` (`?refresh=1` bypasses) and executes a 3-stage pipeline with strict `4,500 ms` timeouts so UI responsiveness never degrades:
+When querying an active deployment, `src/app/api/marketplace/route.ts` caches responses per `network` for `15s` (`?refresh=1` bypasses, serving both `mode=live` and `mode=demo` slices from a single network snapshot without redundant RPC re-indexing) and executes a 3-stage pipeline with strict `4,500 ms` timeouts so UI responsiveness never degrades:
 
 1. **Router State + Fast RPC Window Scan:**
    - Reads `jobIndex()`, `paused()`, and `totalPaidToProvers()` in parallel via `Promise.allSettled`.
@@ -167,7 +167,7 @@ $$
 ---
 
 ### 4.2 Protocol 12 `zkOP/s` Self-Scoring, 5-Program Suite & Windows Driver Telemetry (`src/lib/benchmark-parser.ts`)
-Mirrored from `crates/zkminer-prover-protocol/src/suite.rs`, `types.rs`, and `crates/zkminer-prover/src/benchmark.rs` (`max/windows-gpu` commit `101edae` & `a12ce82`):
+Mirrored from `crates/zkminer-prover-protocol/src/suite.rs`, `types.rs`, and `crates/zkminer-prover/src/benchmark.rs` (including merged PR #27 `max/windows-gpu` `0d86fb2`, open PR #35 `max/splash-progress-bars`, and `max/telemetry-keep-libs` `e44de6e`):
 
 1. **Miner-Driven Self-Scored `zkOP/s` (`measure_zkop_mix`):**
    - **1 `zkOP` is defined as 1 Succinct SP1 RISC-V cycle** on the `zkop-mix` guest at `ZKOP_MIX_ITERATIONS = 3,202`, which equals **`ZKOP_MIX_SP1_CYCLES = 50,007,139`** SP1 cycles.
@@ -185,8 +185,8 @@ $$
    - **STARK Rate & Groth16 Wrap Split (`program_stages`):**
      - `DeviceBenchmark::stark_rate()` computes the **cycle-weighted STARK rate** across the 5 priced suite programs ($\sum \text{cycles} / \sum \text{stark\_secs}$, excluding `zkop-mix`), while `DeviceBenchmark::wrap_secs()` takes the **median** Groth16 wrap latency (timed across all 5 programs on RISC Zero, or once by difference on the final `chacha-mix` program on SP1 after GPU warm-up is paid).
 
-3. **Windows Native Vendor Driver Telemetry (`crates/zkminer-tui/src/windows_telemetry/` on `main`; moving to `crates/zkminer-prover/src/windows_telemetry/` in `max/splash-progress-bars` `df6c7f8`):**
-   - On Windows (where `/sys/class/drm` is absent), `zkminer` loads vendor driver libraries at runtime and joins physical cards by canonical 4-digit domain PCI bus ID (`0000:bus:dev.fn`):
+3. **Windows Native Vendor Driver Telemetry (`crates/zkminer-tui/src/windows_telemetry/` on `main` via PR #27 `0d86fb2`; shared in `crates/zkminer-prover/src/windows_telemetry/` in PR #35 `max/splash-progress-bars` `df6c7f8` and pinned for process lifetime via `Box::leak` in `max/telemetry-keep-libs` `e44de6e`):**
+   - On Windows (where `/sys/class/drm` is absent), `zkminer` loads vendor driver libraries at runtime (keeping `amdadlx64.dll` and `ControlLib.dll` permanently loaded so driver thread-pool callbacks never jump into unmapped memory) and joins physical cards by canonical 4-digit domain PCI bus ID (`0000:bus:dev.fn`):
      - **Intel (`IGCL` / `ControlLib.dll`):** Negotiated slot PCIe link (`Gen1`–`Gen6` x width), GPU/VRAM temperatures & clocks, energy/activity counter-delta power & utilization, and throttle limits (`PL1`, `THERMAL`).
      - **AMD (`ADLX` / `amdadlx64.dll`):** Negotiated slot PCIe link, edge/hotspot/memory temperatures, clocks, board power, utilization, fan RPM, voltage, and VRAM used/total.
      - **NVIDIA (`NVML` / `nvml.dll`):** Negotiated slot PCIe link (`current_pcie_link_gen` / `current_pcie_link_width`), clocks, temperatures, fan, VRAM, and power draw.
@@ -247,14 +247,14 @@ $$
 
 If any segment size violates this invariant (as demonstrated in Preset #3 `Segment Inflation Warning Demo`, where a malicious guest branches on `po2 >= 20` and `SYS_RANDOM` entropy to inflate cycles ~15.6x and alter the journal), `sizeCheck` flips to `"differs"`, `binding` flips to `"fails"`, and `zkminer`'s pre-claim guard blocks collateral lockup.
 
-#### B. GPU VRAM Tier Gates
-- **RISC Zero (`risc0`):** Peak device memory at `po2 = 20` is `12,436 MiB` (clearing `zkminer`'s `14 GiB` default consumer gate; `12 GiB` cards calibrate down to `po2 = 19` at `8,920 MiB`). Workloads exceeding `140M` charged cycles recommend the **24 GiB+ Flagship Tier** so the `3.45 GB` Groth16 SRS stays resident in VRAM (`>= 20 GiB` rule).
-- **Succinct SP1 (`sp1`):** On `main` (`zkmarket@c8333aa`), workloads $\le 134{,}217{,}728$ (`134M`) elements size to **16 GiB** (`15,092 MiB` peak VRAM on CUDA 12.9 / ROCm 10.1), and larger workloads step up to **24 GiB+** (`268M` elements, `17,766 MiB`). *(Pending upstream `PR #33` `b5de292` reduces SP1 v6.1.0 measured tiers to `9,500 MiB` and `12,000 MiB`.)*
+#### B. GPU VRAM Tier Gates & SDK Versions
+- **RISC Zero (`risc0`):** Peak device memory at `po2 = 20` is `12,436 MiB` (clearing `zkminer`'s `14 GiB` default consumer gate; `12 GiB` cards calibrate down to `po2 = 19` at `8,920 MiB`). Workloads exceeding `140M` charged cycles recommend the **24 GiB+ Flagship Tier** so the `3.45 GB` Groth16 SRS stays resident in VRAM (`>= 20 GiB` rule). Tracks upstream `max/risc0-release-3.1` (`58dfae89`, `risc0-zkvm 3.0.6` and Groth16 component `v0.2.0` addressing `GHSA-g6qg-9j8p-7j87`).
+- **Succinct SP1 (`sp1`):** On `main` (`zkmarket@c8333aa`), workloads $\le 134{,}217{,}728$ (`134M`) elements size to **16 GiB** (`15,092 MiB` peak VRAM on CUDA 12.9 / ROCm 10.1), and larger workloads step up to **24 GiB+** (`268M` elements, `17,766 MiB`). *(Pending upstream `PR #33` `b5de292` reduces SP1 v6.1.0 measured tiers to `9,500 MiB` and `12,000 MiB`, while open `PR #34` `17b0211` adds `SP1_MEASURE_SETUP_BOUND = 600s` and brings `PR #32` `c4ba622` onto `main`.)*
 - **OpenVM (`openvm`):** Recommends **24 GiB VRAM + 32 GiB host RAM** for Halo2 outer recursion + KZG SRS and validates `extraVerifierData = abi.encode(appExeCommit, appVmCommit)` (`programId == keccak256(extraVerifierData)`).
 
 #### C. Hybrid Local Binary + Deterministic Execution (`POST /api/simulate`)
 `src/app/api/simulate/route.ts` checks `process.env.ZKMINER_BIN || "zkminer"`:
-1. When a 32-byte hex `jobId` (`0x` + 64 hex chars) is provided and `zkminer` is installed locally, it executes `zkminer simulate <jobId> [--po2 20]` (`8,000 ms` timeout) and returns `executionEngine: "zkminer-cli-binary"`.
+1. When a 32-byte hex `jobId` (`0x` + 64 hex chars) is provided and `zkminer` is installed locally, it executes `zkminer simulate <jobId> [--po2 20]` (`8,000 ms` timeout), maps the `crates/zkminer-cli/src/commands/simulate.rs` `Report` JSON (`REPORT_SCHEMA = 1`, including `sizeCheck: "same" | "differs" | "skipped"`, `userCycles`, `keccakCycles`, `hostInputReads`, `sysRandRule`, `inputBytes`, and `po2`), recomputes all dependent sizing/pricing/VRAM fields via `mergeCliSimulateReport()`, and returns `executionEngine: "zkminer-cli-binary"`. If the CLI reports a non-measured `outcome` (such as `no_worker` or `no_program`), it preserves the deterministic pre-flight sizing and surfaces the CLI outcome reason in `warnings`.
 2. In serverless / browser-only deployments without a local GPU binary, it falls back seamlessly to `runDeterministicSimulation()` (`executionEngine: "deterministic-analyzer"`), which is also shared directly with `/` so job cycle breakdowns match 1:1 across pages.
 
 ---

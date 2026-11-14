@@ -424,15 +424,15 @@ export default function SimulateStudioPage() {
                       type="button"
                       onClick={() => {
                         setActivePresetId(null);
+                        setDeclaredCycles(undefined);
+                        setJobIdHint(undefined);
+                        setProgramIdHint(undefined);
                         setTargetZkvm(vm.id);
                         executeSimulation({
                           elfUrl,
                           targetZkvm: vm.id,
                           stdin,
                           singleRun,
-                          declaredCycles,
-                          jobId: jobIdHint,
-                          programId: programIdHint,
                         });
                       }}
                       className={cn(
@@ -457,6 +457,8 @@ export default function SimulateStudioPage() {
                 value={stdin}
                 onChange={(e) => {
                   setActivePresetId(null);
+                  setDeclaredCycles(undefined);
+                  setJobIdHint(undefined);
                   setStdin(e.target.value);
                 }}
                 rows={4}

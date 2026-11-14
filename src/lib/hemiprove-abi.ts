@@ -481,6 +481,10 @@ export const HEMI_PROVE_ROUTER_ABI = [
   },
 ] as const;
 
+export const ROUTER_JOB_SUBMITTED_EVENT = HEMI_PROVE_ROUTER_ABI[0];
+export const ROUTER_JOB_CLAIMED_EVENT = HEMI_PROVE_ROUTER_ABI[1];
+export const ROUTER_JOB_FULFILLED_EVENT = HEMI_PROVE_ROUTER_ABI[3];
+
 export const HEMI_PROVE_STAKING_ABI = parseAbi([
   "event Staked(address indexed prover, uint128 amount, uint128 newTotal)",
   "function stake(address prover, uint128 amount) external",

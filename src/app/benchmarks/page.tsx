@@ -137,6 +137,8 @@ export default function BenchmarksPage() {
   const [overrideVendor, setOverrideVendor] = useState<"" | GpuVendor>("");
   const [overrideOs, setOverrideOs] = useState<HostOs>("Linux");
   const [overrideVram, setOverrideVram] = useState("16");
+  const [overrideTdp, setOverrideTdp] = useState("");
+  const [overrideMsrp, setOverrideMsrp] = useState("");
   const [submittedBy, setSubmittedBy] = useState("");
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
 
@@ -265,20 +267,35 @@ export default function BenchmarksPage() {
 
   const liveParsePreview = useMemo(() => {
     if (!rawInput.trim()) return null;
+    const parsedTdp = Number(overrideTdp);
+    const parsedMsrp = Number(overrideMsrp);
     return parseZkMinerBenchmark(rawInput, {
       gpuModel: overrideModel || undefined,
       vendor: overrideVendor || undefined,
       os: overrideOs,
       vramGb: Number(overrideVram) || 16,
+      tdpWatts: parsedTdp > 0 ? parsedTdp : undefined,
+      msrpUsd: parsedMsrp > 0 ? parsedMsrp : undefined,
       submittedBy: submittedBy || undefined,
     });
-  }, [rawInput, overrideModel, overrideVendor, overrideOs, overrideVram, submittedBy]);
+  }, [
+    rawInput,
+    overrideModel,
+    overrideVendor,
+    overrideOs,
+    overrideVram,
+    overrideTdp,
+    overrideMsrp,
+    submittedBy,
+  ]);
 
   const handleBenchmarkSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!liveParsePreview?.ok || !liveParsePreview.entry) return;
 
     let canonicalEntry = liveParsePreview.entry;
+    const parsedTdp = Number(overrideTdp);
+    const parsedMsrp = Number(overrideMsrp);
 
     try {
       const res = await fetch("/api/benchmarks", {
@@ -291,6 +308,8 @@ export default function BenchmarksPage() {
             vendor: overrideVendor || undefined,
             os: overrideOs,
             vramGb: Number(overrideVram) || 16,
+            tdpWatts: parsedTdp > 0 ? parsedTdp : undefined,
+            msrpUsd: parsedMsrp > 0 ? parsedMsrp : undefined,
             submittedBy: submittedBy || undefined,
           },
         }),
@@ -1089,6 +1108,34 @@ export default function BenchmarksPage() {
                       max={96}
                       value={overrideVram}
                       onChange={(e) => setOverrideVram(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="mb-1 block text-[10px] text-[#63635E]">
+                      TDP (W, AUTO)
+                    </label>
+                    <Input
+                      type="number"
+                      min={30}
+                      max={2000}
+                      value={overrideTdp}
+                      onChange={(e) => setOverrideTdp(e.target.value)}
+                      placeholder="e.g. 300"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10px] text-[#63635E]">
+                      MSRP ($, AUTO)
+                    </label>
+                    <Input
+                      type="number"
+                      min={50}
+                      max={50000}
+                      value={overrideMsrp}
+                      onChange={(e) => setOverrideMsrp(e.target.value)}
+                      placeholder="e.g. 599"
                     />
                   </div>
                 </div>

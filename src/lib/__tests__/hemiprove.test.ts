@@ -36,6 +36,7 @@ import {
 } from "@/lib/__tests__/mock-logs";
 import {
   KECCAK_CHARGE_PER_REQUEST,
+  mergeCliSimulateReport,
   runDeterministicSimulation,
   SIMULATE_PRESETS,
 } from "@/lib/simulate-engine";
@@ -145,9 +146,11 @@ describe("benchmark-parser", () => {
       "  sha256-chain        200000000     20.00s      10.0M c/s          —",
     ].join("\n");
 
-    const parsedMzkop = parseZkMinerBenchmark(blendedCli);
+    const parsedMzkop = parseZkMinerBenchmark(blendedCli, { msrpUsd: 1599 });
     assert.equal(parsedMzkop.ok, true);
     assert.equal(parsedMzkop.entry?.zkops, 12_400_000);
+    assert.equal(parsedMzkop.entry?.msrpUsd, 1599);
+    assert.equal(parsedMzkop.entry?.starkRateCyclesPerSec, 10_000_000);
     assert.match(parsedMzkop.entry?.model ?? "", /RTX 4090/);
   });
 });
@@ -222,6 +225,56 @@ describe("simulate-engine & code-generator", () => {
       assert.match(openvmSol, /appExeCommit/);
       assert.match(openvmSol, /appVmCommit/);
     }
+  });
+
+  it("merges upstream zkminer simulate Report JSON fields and recomputes derived sizing metrics", () => {
+    const base = runDeterministicSimulation({
+      elfUrl: SIMULATE_PRESETS[1].elfUrl,
+      targetZkvm: "risc0",
+      stdin: SIMULATE_PRESETS[1].stdin,
+      singleRun: false,
+    });
+
+    const merged = mergeCliSimulateReport(base, {
+      schema: 1,
+      outcome: "measured",
+      retryable: false,
+      programCheck: "image_id",
+      programCheckSecs: 0.19,
+      cycles: "157286400",
+      userCycles: 142000000,
+      keccakCycles: 4194304,
+      po2: 20,
+      sizeCheck: "same",
+      sysRandRule: "risc0-public-v3",
+      hostInput: false,
+      hostInputReads: 0,
+      inputBytes: 128,
+      elfBytes: 1500000,
+      sdkVersion: "risc0-zkvm 3.0.6",
+    });
+
+    assert.equal(merged.executionEngine, "zkminer-cli-binary");
+    assert.equal(merged.sizeCheck, "consistent");
+    assert.equal(merged.cycles, "157286400");
+    assert.equal(merged.guestCycles, "142000000");
+    assert.equal(merged.keccakCharges, "4194304");
+    assert.equal(merged.keccakRequests, 4);
+    assert.equal(merged.paddingCycles, String(157286400 - 142000000 - 4194304));
+    assert.equal(merged.inputBytes, 128);
+    assert.equal(merged.vramTierRecommendation.minVramGb, 24);
+    assert.equal(merged.segmentAudit?.length, 7);
+
+    // Non-measured CLI outcome without cycles falls back cleanly to deterministic model with diagnostic warning
+    const fallback = mergeCliSimulateReport(base, {
+      schema: 1,
+      outcome: "no_worker",
+      retryable: true,
+      reason: "no risc0 measure worker configured",
+    });
+    assert.equal(fallback.executionEngine, "deterministic-analyzer");
+    assert.equal(fallback.cycles, base.cycles);
+    assert.ok(fallback.warnings.some((w) => w.includes('outcome="no_worker"')));
   });
 });
 

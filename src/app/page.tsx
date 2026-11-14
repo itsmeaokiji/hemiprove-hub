@@ -81,11 +81,10 @@ export default function MarketplacePage() {
     return () => clearInterval(interval);
   }, []);
 
-  const modeKey = liveStreamEnabled ? "demo" : "live";
   const { data, isFetching } = useQuery<MarketplaceApiResponse>({
-    queryKey: ["marketplace", networkKey, modeKey],
+    queryKey: ["marketplace", networkKey],
     queryFn: async () => {
-      const res = await fetch(`/api/marketplace?network=${networkKey}&mode=${modeKey}`);
+      const res = await fetch(`/api/marketplace?network=${networkKey}`);
       if (!res.ok) throw new Error("Failed to load marketplace feed");
       return res.json();
     },
@@ -97,10 +96,10 @@ export default function MarketplacePage() {
     setIsManualSyncing(true);
     try {
       await queryClient.fetchQuery({
-        queryKey: ["marketplace", networkKey, modeKey],
+        queryKey: ["marketplace", networkKey],
         queryFn: async () => {
           const res = await fetch(
-            `/api/marketplace?network=${networkKey}&mode=${modeKey}&refresh=1`
+            `/api/marketplace?network=${networkKey}&refresh=1`
           );
           if (!res.ok) throw new Error("Failed to refresh marketplace feed");
           return res.json() as Promise<MarketplaceApiResponse>;
@@ -135,15 +134,17 @@ export default function MarketplacePage() {
 
   // Compute escalating Reverse Dutch Auction prices (strictly onChainJobs in LIVE mode)
   const liveJobs = useMemo(() => {
-    const sourceJobs = liveStreamEnabled
-      ? (data?.jobs ?? buildBaselineJobs(networkKey))
-      : (data?.onChainJobs ?? []);
+    if (!liveStreamEnabled) {
+      // Preserve authoritative 4-decimal currentAuctionPrice from HemiProveRouter.getJobStatusView
+      return data?.onChainJobs ?? [];
+    }
+
+    const sourceJobs = data?.jobs ?? buildBaselineJobs(networkKey);
 
     return sourceJobs.map((job) => {
-      if (job.status !== "Open") return job;
-      const dynamicElapsed = liveStreamEnabled
-        ? (job.elapsedSecs + tickSecs * 2) % (job.rampUpPeriodSecs + 20)
-        : job.elapsedSecs;
+      if (job.status !== "Open" || !job.isSimulatedStream) return job;
+      const dynamicElapsed =
+        (job.elapsedSecs + tickSecs * 2) % (job.rampUpPeriodSecs + 20);
       const clampedElapsed = Math.min(job.rampUpPeriodSecs, dynamicElapsed);
       const liveOffer = computeEscalatingOffer(
         job.minOfferHemi,
@@ -724,7 +725,10 @@ export default function MarketplacePage() {
                         <td className="px-2.5 sm:px-3.5 py-3 align-top">
                           <div className="flex items-baseline justify-between gap-1.5 sm:gap-2">
                             <span className="font-semibold text-[#EDEDEC]">
-                              {job.currentOfferHemi.toFixed(2)} {tokenSymbolLabel}
+                              {job.isSimulatedStream
+                                ? job.currentOfferHemi.toFixed(2)
+                                : Number(job.currentOfferHemi.toFixed(4))}{" "}
+                              {tokenSymbolLabel}
                             </span>
                             <span className="text-[10px] text-[#63635E]">
                               /{job.maxOfferHemi.toFixed(1)}

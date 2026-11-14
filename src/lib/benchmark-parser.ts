@@ -115,6 +115,7 @@ export interface ParseBenchmarkOverrides {
   os?: HostOs;
   vramGb?: number;
   tdpWatts?: number;
+  msrpUsd?: number;
   submittedBy?: string;
 }
 
@@ -441,6 +442,7 @@ export function parseZkMinerBenchmark(
         const overrideTdpWatts = normalizePositiveInt(overrides.tdpWatts, 2_000);
         const tdpWatts =
           overrideTdpWatts ?? (devPowerWatts > 0 ? Math.round(devPowerWatts) : 250);
+        const msrpUsd = normalizePositiveInt(overrides.msrpUsd, 50_000) ?? 799;
 
         const pciBusId =
           typeof dev0.pci_bus_id === "string" && dev0.pci_bus_id.trim()
@@ -466,6 +468,7 @@ export function parseZkMinerBenchmark(
           optimalPo2,
           vramGb,
           tdpWatts,
+          msrpUsd,
           zkops,
           starkRate,
           groth16WrapSecs,
@@ -490,7 +493,7 @@ export function parseZkMinerBenchmark(
           zkvm,
           optimalPo2,
           tdpWatts,
-          msrpUsd: 799,
+          msrpUsd,
           zkops,
           starkRateCyclesPerSec: starkRate,
           groth16WrapSecs,
@@ -558,6 +561,7 @@ export function parseZkMinerBenchmark(
 
     // Match upcoming `max/splash-progress-bars` blended per-device line:
     // e.g. `GPU0 AMD Radeon RX 9070 XT: 2.18 MzkOP/s (sp1: 2.76M, risc0: 1.72M)`
+    // or   `NVIDIA GeForce RTX 4090: 12.40 MzkOP/s (sp1 14.10M c/s, risc0 10.90M c/s)`
     const blendedDeviceMatch = line.match(
       /^(?:GPU\d+\s+)?([^:/]+?):\s*([\d,]+(?:\.\d+)?)\s*MzkOP\/s(?:\s*\(([^)]+)\))?$/i
     );
@@ -568,7 +572,21 @@ export function parseZkMinerBenchmark(
       );
       if (!zkops && cardScore > 0) zkops = cardScore;
       if (blendedDeviceMatch[3]) {
-        detectedBlendedNote = `Blended dual-zkVM score (${blendedDeviceMatch[3]})`;
+        const inner = blendedDeviceMatch[3];
+        detectedBlendedNote = `Blended dual-zkVM score (${inner})`;
+        const sp1Match = inner.match(/sp1\s*:?\s*([\d.]+)\s*M/i);
+        const risc0Match = inner.match(/risc0\s*:?\s*([\d.]+)\s*M/i);
+        if (!detectedBackend) {
+          if (sp1Match) detectedBackend = "sp1";
+          else if (risc0Match) detectedBackend = "risc0";
+        }
+        if (!tableStarkRate) {
+          const r = sp1Match?.[1] ?? risc0Match?.[1];
+          if (r) {
+            const parsedRate = Math.round(parseFloat(r) * 1_000_000);
+            if (parsedRate > 0) tableStarkRate = parsedRate;
+          }
+        }
       }
       continue;
     }
@@ -774,6 +792,7 @@ export function parseZkMinerBenchmark(
   const finalVramGb = normalizePositiveInt(overrides.vramGb, 512) ?? 16;
   const finalTdpWatts =
     normalizePositiveInt(overrides.tdpWatts, 2_000) ?? detectedPowerWatts ?? 260;
+  const finalMsrpUsd = normalizePositiveInt(overrides.msrpUsd, 50_000) ?? 699;
   const finalStarkRate = detectedStarkRate ?? zkops;
   const finalGroth16Secs = detectedGroth16Secs ?? 3.2;
 
@@ -785,6 +804,7 @@ export function parseZkMinerBenchmark(
     detectedPo2,
     finalVramGb,
     finalTdpWatts,
+    finalMsrpUsd,
     zkops,
     finalStarkRate,
     finalGroth16Secs,
@@ -806,7 +826,7 @@ export function parseZkMinerBenchmark(
     zkvm,
     optimalPo2: detectedPo2,
     tdpWatts: finalTdpWatts,
-    msrpUsd: 699,
+    msrpUsd: finalMsrpUsd,
     zkops,
     starkRateCyclesPerSec: finalStarkRate,
     groth16WrapSecs: finalGroth16Secs,

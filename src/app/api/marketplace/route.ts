@@ -7,13 +7,20 @@ import {
   type Hex,
 } from "viem";
 import {
+  computeEscalatingOffer,
   HEMIPROVE_DEPLOYMENTS,
   hemiMainnet,
   hemiSepolia,
   resolveProofSystemById,
   type HemiNetworkKey,
 } from "@/lib/hemi-chain";
-import { HEMI_PROVE_ROUTER_ABI, PROGRAM_REGISTRY_ABI } from "@/lib/hemiprove-abi";
+import {
+  HEMI_PROVE_ROUTER_ABI,
+  PROGRAM_REGISTRY_ABI,
+  ROUTER_JOB_CLAIMED_EVENT,
+  ROUTER_JOB_FULFILLED_EVENT,
+  ROUTER_JOB_SUBMITTED_EVENT,
+} from "@/lib/hemiprove-abi";
 import {
   buildBaselineJobs,
   buildBaselineKpis,
@@ -47,9 +54,10 @@ const MAX_BLOCK_TIMESTAMP_LOOKUPS = 12;
 interface CachedMarketplaceEntry {
   expiresAtMs: number;
   payload: MarketplaceApiResponse;
+  demoJobs: MarketplaceJob[];
 }
 
-const marketplaceCache = new Map<string, CachedMarketplaceEntry>();
+const marketplaceCache = new Map<HemiNetworkKey, CachedMarketplaceEntry>();
 
 interface ResolvedProgramMeta {
   name?: string;
@@ -73,13 +81,16 @@ export async function GET(request: NextRequest) {
 
   const network: HemiNetworkKey = networkParam === "mainnet" ? "mainnet" : "sepolia";
   const mode = modeParam === "live" ? "live" : "demo";
-  const cacheKey = `${network}:${mode}`;
   const nowMs = Date.now();
 
   if (!forceRefresh) {
-    const cached = marketplaceCache.get(cacheKey);
+    const cached = marketplaceCache.get(network);
     if (cached && cached.expiresAtMs > nowMs) {
-      return NextResponse.json(cached.payload, {
+      const cachedResponse: MarketplaceApiResponse = {
+        ...cached.payload,
+        jobs: mode === "live" ? cached.payload.onChainJobs : cached.demoJobs,
+      };
+      return NextResponse.json(cachedResponse, {
         headers: {
           "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30",
         },
@@ -160,7 +171,7 @@ export async function GET(request: NextRequest) {
           client
             .getLogs({
               address: deployment.router,
-              event: HEMI_PROVE_ROUTER_ABI[0],
+              event: ROUTER_JOB_SUBMITTED_EVENT,
               fromBlock,
               toBlock: headBlock,
             })
@@ -168,7 +179,7 @@ export async function GET(request: NextRequest) {
           client
             .getLogs({
               address: deployment.router,
-              event: HEMI_PROVE_ROUTER_ABI[1],
+              event: ROUTER_JOB_CLAIMED_EVENT,
               fromBlock,
               toBlock: headBlock,
             })
@@ -176,7 +187,7 @@ export async function GET(request: NextRequest) {
           client
             .getLogs({
               address: deployment.router,
-              event: HEMI_PROVE_ROUTER_ABI[3],
+              event: ROUTER_JOB_FULFILLED_EVENT,
               fromBlock,
               toBlock: headBlock,
             })
@@ -395,6 +406,7 @@ export async function GET(request: NextRequest) {
             fulfillMeta?.prover ?? claimMeta?.prover ?? null;
           let rampUpSecs = 300;
           let elapsedSecs = 60;
+          let curveType: 0 | 1 = 0;
           let expectedCycles = 50_000_000;
           let isContract = false;
 
@@ -443,6 +455,30 @@ export async function GET(request: NextRequest) {
               }
               rampUpSecs = Number(view.rampUpPeriod) || 300;
               elapsedSecs = Number(view.auctionTimeElapsed) || 0;
+              if (
+                statusLabel === "Open" &&
+                elapsedSecs > 0 &&
+                elapsedSecs < rampUpSecs &&
+                maxPriceHemi > minPriceHemi
+              ) {
+                const linearEst = computeEscalatingOffer(
+                  minPriceHemi,
+                  maxPriceHemi,
+                  rampUpSecs,
+                  elapsedSecs,
+                  0
+                );
+                const quadEst = computeEscalatingOffer(
+                  minPriceHemi,
+                  maxPriceHemi,
+                  rampUpSecs,
+                  elapsedSecs,
+                  1
+                );
+                if (Math.abs(auctionPrice - quadEst) + 1e-6 < Math.abs(auctionPrice - linearEst)) {
+                  curveType = 1;
+                }
+              }
               if (view.expectedCycles > BigInt(0)) {
                 expectedCycles = Number(view.expectedCycles);
               }
@@ -497,7 +533,7 @@ export async function GET(request: NextRequest) {
             settledPriceHemi,
             rampUpPeriodSecs: rampUpSecs,
             elapsedSecs,
-            curveType: 0,
+            curveType,
             expectedCycles,
             actualCycles: fulfillMeta?.actualCycles,
             status: statusLabel,
@@ -615,9 +651,10 @@ export async function GET(request: NextRequest) {
     jobs: responseJobs,
   };
 
-  marketplaceCache.set(cacheKey, {
+  marketplaceCache.set(network, {
     expiresAtMs: Date.now() + MARKETPLACE_CACHE_TTL_MS,
     payload: response,
+    demoJobs,
   });
 
   return NextResponse.json(response, {

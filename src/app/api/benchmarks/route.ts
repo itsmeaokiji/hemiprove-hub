@@ -29,6 +29,10 @@ function sanitizeOverrides(raw: ParseBenchmarkOverrides | undefined): ParseBench
       typeof raw.tdpWatts === "number" && Number.isFinite(raw.tdpWatts) && raw.tdpWatts > 0
         ? Math.min(2_000, Math.round(raw.tdpWatts))
         : undefined,
+    msrpUsd:
+      typeof raw.msrpUsd === "number" && Number.isFinite(raw.msrpUsd) && raw.msrpUsd > 0
+        ? Math.min(50_000, Math.round(raw.msrpUsd))
+        : undefined,
     submittedBy:
       typeof raw.submittedBy === "string"
         ? raw.submittedBy.trim().slice(0, 64) || undefined

@@ -86,6 +86,23 @@ export function toSafeCycleNumber(raw?: bigint): number | undefined {
   return Number(raw > maxSafe ? maxSafe : raw);
 }
 
+function isNewerEventLog(
+  candidateBlock?: bigint,
+  candidateTimestamp?: string,
+  existingBlock?: bigint,
+  existingTimestamp?: string
+): boolean {
+  if (candidateBlock !== undefined && existingBlock !== undefined) {
+    return candidateBlock > existingBlock;
+  }
+  const candMs = parseTimestampMs(candidateTimestamp);
+  const existMs = parseTimestampMs(existingTimestamp);
+  if (candMs !== undefined && existMs !== undefined) {
+    return candMs > existMs;
+  }
+  return false;
+}
+
 /**
  * Decodes `JobSubmitted`, `JobClaimed`, and `JobFulfilled` logs returned by Blockscout v2
  * so live jobs can correlate claim/settlement latency and actual fulfilled cycles.
@@ -157,7 +174,16 @@ export function extractRouterEventsFromBlockscoutLogs(
         };
         if (!args.jobId || !args.prover) continue;
         const lowerId = args.jobId.toLowerCase();
-        if (!claimsByJobId.has(lowerId)) {
+        const existingClaim = claimsByJobId.get(lowerId);
+        if (
+          !existingClaim ||
+          isNewerEventLog(
+            blockNumber,
+            item.block_timestamp,
+            existingClaim.blockNumber,
+            existingClaim.blockTimestamp
+          )
+        ) {
           claimsByJobId.set(lowerId, {
             prover: args.prover,
             settledPrice: args.settledPrice,
@@ -176,7 +202,16 @@ export function extractRouterEventsFromBlockscoutLogs(
         };
         if (!args.jobId || !args.prover) continue;
         const lowerId = args.jobId.toLowerCase();
-        if (!fulfillmentsByJobId.has(lowerId)) {
+        const existingFulfill = fulfillmentsByJobId.get(lowerId);
+        if (
+          !existingFulfill ||
+          isNewerEventLog(
+            blockNumber,
+            item.block_timestamp,
+            existingFulfill.blockNumber,
+            existingFulfill.blockTimestamp
+          )
+        ) {
           fulfillmentsByJobId.set(lowerId, {
             prover: args.prover,
             settledPrice: args.settledPrice,
