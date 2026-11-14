@@ -62,6 +62,24 @@ function extractArchCode(arch: string): string {
   return match ? match[1] : arch;
 }
 
+function isValidBenchmarkEntry(raw: unknown): raw is BenchmarkEntry {
+  if (!raw || typeof raw !== "object") return false;
+  const e = raw as Partial<BenchmarkEntry>;
+  const w = e.workloads;
+  if (!w || typeof w !== "object") return false;
+  return (
+    typeof e.id === "string" &&
+    typeof e.zkops === "number" &&
+    Number.isFinite(e.zkops) &&
+    typeof w["sha256-chain"] === "number" &&
+    typeof w["chacha-mix"] === "number" &&
+    typeof w["ecdsa-verify"] === "number" &&
+    typeof w["bigint-mul"] === "number" &&
+    typeof w["memory-merkle"] === "number" &&
+    typeof w["zkop-mix"] === "number"
+  );
+}
+
 function VendorIndicator({ vendor, stack }: { vendor: GpuVendor; stack: string }) {
   if (vendor === "NVIDIA") {
     return (
@@ -237,9 +255,20 @@ export default function BenchmarksPage() {
     try {
       const saved = window.localStorage.getItem(LOCAL_STORAGE_BENCHMARKS_KEY);
       if (saved) {
-        const parsed = JSON.parse(saved) as BenchmarkEntry[];
+        const parsed = JSON.parse(saved) as unknown[];
         if (Array.isArray(parsed)) {
-          setCommunityEntries(parsed);
+          const valid = parsed.filter(isValidBenchmarkEntry);
+          setCommunityEntries(valid);
+          if (valid.length !== parsed.length) {
+            if (valid.length === 0) {
+              window.localStorage.removeItem(LOCAL_STORAGE_BENCHMARKS_KEY);
+            } else {
+              window.localStorage.setItem(
+                LOCAL_STORAGE_BENCHMARKS_KEY,
+                JSON.stringify(valid)
+              );
+            }
+          }
         }
       }
     } catch {
@@ -250,9 +279,9 @@ export default function BenchmarksPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((payload) => {
         if (payload?.entries && Array.isArray(payload.entries)) {
-          const remoteCommunity = (payload.entries as BenchmarkEntry[]).filter(
-            (e) => !e.verified
-          );
+          const remoteCommunity = (payload.entries as unknown[])
+            .filter(isValidBenchmarkEntry)
+            .filter((e) => !e.verified);
           if (remoteCommunity.length > 0) {
             setCommunityEntries((prev) => {
               const existingIds = new Set(prev.map((p) => p.id));
@@ -615,6 +644,25 @@ export default function BenchmarksPage() {
             placeholder="SEARCH ARCH / GPU..."
             className="h-7 flex-1 sm:w-48 sm:flex-none text-[11px]"
           />
+          {communityEntries.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setCommunityEntries([]);
+                try {
+                  window.localStorage.removeItem(LOCAL_STORAGE_BENCHMARKS_KEY);
+                } catch {
+                  // ignore
+                }
+                setSelectedGpuId("rtx-4090-cuda-sp1");
+                setStatusBanner("CLEARED LOCAL USER BENCHMARK SUBMISSIONS");
+              }}
+              title="Clear unverified user benchmark entries saved in this browser's localStorage"
+              className="h-7 shrink-0 rounded-[2px] border border-[#232320] bg-[#0B0B0A] px-2 font-mono text-[10px] uppercase tracking-wider text-[#9A9A94] transition-colors hover:border-[#F43F5E] hover:text-[#F43F5E]"
+            >
+              [CLEAR USER ({communityEntries.length})]
+            </button>
+          )}
           <Button
             size="sm"
             className="shrink-0"
@@ -944,8 +992,8 @@ export default function BenchmarksPage() {
                   <div className="flex items-center justify-between px-2.5 py-1.5">
                     <span className="text-[#63635E]">MERKLE (15%) / ZKOP-MIX</span>
                     <span className="text-[#9A9A94]">
-                      {selectedGpu.workloads["memory-merkle"].toFixed(2)}s •{" "}
-                      {selectedGpu.workloads["zkop-mix"].toFixed(2)}s
+                      {(selectedGpu.workloads?.["memory-merkle"] ?? 0).toFixed(2)}s •{" "}
+                      {(selectedGpu.workloads?.["zkop-mix"] ?? 0).toFixed(2)}s
                     </span>
                   </div>
                 </div>

@@ -536,3 +536,49 @@ main().catch((err) => {
 });
 `;
 }
+
+export function generateZkMinerCliScript(
+  report: SimulateReportJson,
+  network: HemiNetworkKey,
+  rawStdin: string,
+  singleRun = false
+): string {
+  const dep = HEMIPROVE_DEPLOYMENTS[network];
+  const routerAddr = dep.router ?? ZERO_ADDRESS;
+  const safeElfUri = sanitizeCommentText(report.elfUri || "ar://unspecified");
+  const trimmedStdin = rawStdin.trim() || "0x00";
+  const singleFlag = singleRun ? " \\\n  --single" : "";
+  const tokenSymbol = network === "sepolia" ? "tHEMI" : "HEMI";
+
+  return `#!/usr/bin/env bash
+# ==============================================================================
+# HEMIPROVE // ZKMINER CLI WORKBENCH COMMANDS (PROTOCOL V${report.protocolVersion})
+# Target Chain : ${sanitizeCommentText(dep.name)} [${dep.chainId}]
+# Target zkVM  : ${report.backend.toUpperCase()} (${sanitizeCommentText(report.sdkVersion)})
+# Program ID   : ${sanitizeBytes32(report.programId)}
+# Sized Cycles : ${Number(report.cycles).toLocaleString()} (${report.vramTierRecommendation})
+# Est. Auction : ${report.pricingRecommendation.minPriceHemi} -> ${report.pricingRecommendation.maxPriceHemi} ${tokenSymbol} (${report.pricingRecommendation.rampUpPeriodSecs}s ramp)
+# ==============================================================================
+
+# 01 // PRE-FLIGHT ELF SIZING & PROTOCOL 12 (RISC0-PUBLIC-V3) SEGMENT AUDIT
+# Runs guest execution without generating a Groth16/Plonk proof.
+# Outputs camelCase Report JSON (cycles, userCycles, keccakCycles, sizeCheck).
+zkminer simulate \\
+  --elf "${safeElfUri}" \\
+  --zkvm ${report.backend} \\
+  --stdin "${sanitizeCommentText(trimmedStdin)}"${singleFlag} \\
+  --json
+
+# 02 // LOCAL GPU ZKOP/S & STARK THROUGHPUT BENCHMARK
+# Measures 50M-cycle zkop-mix (ZKOP_SP1_PER_RISC0 = 3.71x) across CUDA / ROCm / SYCL.
+# Paste the resulting output into HemiProve Hub -> [02] GPU BENCHMARKS -> SUBMIT CLI OUTPUT.
+zkminer benchmark --json
+
+# 03 // LAUNCH STAKED PROVER WORKER ON ${dep.shortName.toUpperCase()} [${dep.chainId}]
+# Polls HemiProveRouter (${routerAddr}) for open ${report.backend.toUpperCase()} auctions.
+zkminer prove \\
+  --rpc-url "${dep.rpcUrl}" \\
+  --router "${routerAddr}" \\
+  --zkvm ${report.backend}
+`;
+}

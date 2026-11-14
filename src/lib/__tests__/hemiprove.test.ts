@@ -11,6 +11,7 @@ import {
 import {
   generateSolidityRequesterCode,
   generateViemSubmitterScript,
+  generateZkMinerCliScript,
 } from "@/lib/code-generator";
 import {
   computeEscalatingOffer,
@@ -207,6 +208,12 @@ describe("simulate-engine & code-generator", () => {
 
     const viemScriptEven = generateViemSubmitterScript(maliciousReport, "sepolia", "0x1234");
     assert.match(viemScriptEven, /"0x1234" as Hex/);
+
+    const cliScript = generateZkMinerCliScript(maliciousReport, "sepolia", "0x1234", true);
+    assert.match(cliScript, /zkminer simulate/);
+    assert.match(cliScript, /--single/);
+    assert.match(cliScript, /zkminer benchmark --json/);
+    assert.match(cliScript, /zkminer prove/);
   });
 
   it("includes OpenVM exe/vm commitment encoding when targeting OpenVM", () => {

@@ -9,6 +9,7 @@ import type { ZkVmBackend } from "@/lib/hemi-chain";
 import {
   generateSolidityRequesterCode,
   generateViemSubmitterScript,
+  generateZkMinerCliScript,
 } from "@/lib/code-generator";
 import {
   runDeterministicSimulation,
@@ -20,7 +21,7 @@ import {
 } from "@/lib/simulate-engine";
 import { cn, shortenHex } from "@/lib/utils";
 
-type ArtifactTab = "json" | "solidity" | "viem";
+type ArtifactTab = "json" | "solidity" | "viem" | "cli";
 
 const SESSION_STORAGE_SIMULATE_KEY = "hemiprove-hub:simulate-session:v1";
 
@@ -208,7 +209,8 @@ export default function SimulateStudioPage() {
           if (
             saved.artifactTab === "json" ||
             saved.artifactTab === "solidity" ||
-            saved.artifactTab === "viem"
+            saved.artifactTab === "viem" ||
+            saved.artifactTab === "cli"
           ) {
             setArtifactTab(saved.artifactTab);
           }
@@ -313,6 +315,11 @@ export default function SimulateStudioPage() {
     [report, networkKey, stdin]
   );
 
+  const cliScriptCode = useMemo(
+    () => generateZkMinerCliScript(report, networkKey, stdin, singleRun),
+    [report, networkKey, stdin, singleRun]
+  );
+
   const rawJsonString = useMemo(() => JSON.stringify(report, null, 2), [report]);
 
   const activeArtifactContent =
@@ -320,7 +327,9 @@ export default function SimulateStudioPage() {
       ? rawJsonString
       : artifactTab === "solidity"
         ? solidityCode
-        : viemScriptCode;
+        : artifactTab === "viem"
+          ? viemScriptCode
+          : cliScriptCode;
 
   const activeArtifactLines = useMemo(
     () => activeArtifactContent.split("\n"),
@@ -953,23 +962,28 @@ export default function SimulateStudioPage() {
               </div>
 
               <div className="flex flex-1 items-center justify-between">
-                <div className="grid w-full grid-cols-3 divide-x divide-[#232320] sm:flex sm:w-auto sm:items-center">
+                <div className="grid w-full grid-cols-4 divide-x divide-[#232320] sm:flex sm:w-auto sm:items-center">
                   {(
                     [
                       {
-                        id: "json",
-                        shortLabel: "JSON",
-                        label: "RAW SIMULATE JSON",
-                      },
-                      {
                         id: "solidity",
                         shortLabel: "SOLIDITY",
-                        label: "SOLIDITY CONTRACT (hemiprove-abi)",
+                        label: "SOLIDITY CONTRACT",
                       },
                       {
                         id: "viem",
                         shortLabel: "VIEM SDK",
-                        label: "VIEM TYPESCRIPT SDK",
+                        label: "VIEM TS SDK",
+                      },
+                      {
+                        id: "cli",
+                        shortLabel: "CLI",
+                        label: "ZKMINER CLI",
+                      },
+                      {
+                        id: "json",
+                        shortLabel: "JSON",
+                        label: "REPORT JSON",
                       },
                     ] as const
                   ).map((tab) => {

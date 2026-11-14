@@ -83,6 +83,8 @@ export default function MarketplacePage() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [mobilePane, setMobilePane] = useState<"table" | "inspector">("table");
   const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [scrubElapsedSecs, setScrubElapsedSecs] = useState<number | null>(null);
+  const [scrubCurveType, setScrubCurveType] = useState<0 | 1 | null>(null);
   const hasRestoredSessionRef = useRef(false);
 
   useEffect(() => {
@@ -256,6 +258,12 @@ export default function MarketplacePage() {
     }
     return null;
   }, [selectedJobId, filteredJobs, liveJobs, liveStreamEnabled, networkKey]);
+
+  const inspectedJobId = inspectedJob?.jobId ?? null;
+  useEffect(() => {
+    setScrubElapsedSecs(null);
+    setScrubCurveType(null);
+  }, [inspectedJobId]);
 
   const simulatedJobSizing = useMemo(() => {
     if (!inspectedJob) return null;
@@ -991,51 +999,48 @@ export default function MarketplacePage() {
                 </div>
               </div>
 
-              {/* Datasheet Section 1: ELF Binary URI & Program ID */}
-              <div className="space-y-2.5 p-4 font-mono text-xs tabular-nums">
-                <div className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
-                  01 // ELF BINARY &amp; PROGRAM BINDING
-                </div>
-
-                <div className="rounded-[2px] border border-[#232320] bg-[#0B0B0A] p-2.5">
-                  <div className="flex items-center justify-between text-[10px] text-[#63635E]">
-                    <span>
-                      STORAGE SOURCE [{inspectedJob.elfSourceType.toUpperCase()}]
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => copyValue("elf", inspectedJob.elfUri)}
-                      className="inline-flex items-center gap-1 text-[#9A9A94] hover:text-[#EDEDEC]"
-                    >
-                      {copiedField === "elf" ? (
-                        <>
-                          <Check className="h-3 w-3 text-[#10B981]" /> COPIED
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3 w-3" /> COPY URI
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  <div className="mt-1 break-all text-[11px] text-[#EDEDEC]">
-                    {inspectedJob.elfUri.startsWith("http") ? (
-                      <a
-                        href={inspectedJob.elfUri}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="underline decoration-[#232320] hover:decoration-[#FF5500]"
-                      >
-                        {inspectedJob.elfUri}
-                      </a>
+              {/* Datasheet Section 1: ELF Binary URI & Program ID (Flush Edge-to-Edge, No Nested Cards) */}
+              <div className="font-mono text-xs tabular-nums">
+                <div className="flex items-center justify-between border-b border-[#232320] bg-[#111110] px-4 py-2 text-[11px] uppercase tracking-[0.12em] text-[#63635E]">
+                  <span>01 // ELF BINARY &amp; PROGRAM BINDING</span>
+                  <button
+                    type="button"
+                    onClick={() => copyValue("elf", inspectedJob.elfUri)}
+                    className="inline-flex items-center gap-1 text-[10px] text-[#9A9A94] hover:text-[#EDEDEC]"
+                  >
+                    {copiedField === "elf" ? (
+                      <>
+                        <Check className="h-3 w-3 text-[#10B981]" /> COPIED
+                      </>
                     ) : (
-                      inspectedJob.elfUri
+                      <>
+                        <Copy className="h-3 w-3" /> COPY URI
+                      </>
                     )}
-                  </div>
+                  </button>
                 </div>
 
-                <div className="divide-y divide-[#232320] border border-[#232320] bg-[#0B0B0A] text-[11px]">
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
+                <div className="divide-y divide-[#232320] bg-[#0B0B0A] text-[11px]">
+                  <div className="px-4 py-2.5">
+                    <div className="text-[10px] uppercase text-[#63635E]">
+                      STORAGE SOURCE [{inspectedJob.elfSourceType.toUpperCase()}]
+                    </div>
+                    <div className="mt-1 break-all text-[11px] text-[#EDEDEC]">
+                      {inspectedJob.elfUri.startsWith("http") ? (
+                        <a
+                          href={inspectedJob.elfUri}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline decoration-[#232320] hover:decoration-[#FF5500]"
+                        >
+                          {inspectedJob.elfUri}
+                        </a>
+                      ) : (
+                        inspectedJob.elfUri
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">JOB_ID</span>
                     <button
                       type="button"
@@ -1050,79 +1055,208 @@ export default function MarketplacePage() {
                       )}
                     </button>
                   </div>
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">PROGRAM_ID</span>
                     <span className="text-[#9A9A94]">
                       {shortenHex(inspectedJob.programId, 8, 6)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">PROOF_SYSTEM</span>
                     <span className="text-[#EDEDEC]">{inspectedJob.proofSystemLabel}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Datasheet Section 2: Auction Curve Parameters */}
-              <div className="space-y-2.5 p-4 font-mono text-xs tabular-nums">
-                <div className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
-                  02 // AUCTION CURVE PARAMETERS
-                </div>
-                <div className="divide-y divide-[#232320] border border-[#232320] bg-[#0B0B0A] text-[11px]">
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
-                    <span className="text-[#63635E]">START OFFER (MIN)</span>
-                    <span className="text-[#9A9A94]">
-                      {inspectedJob.minOfferHemi.toFixed(4)} {tokenSymbolLabel}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
-                    <span className="text-[#63635E]">CURRENT OFFER</span>
-                    <span className="font-semibold text-[#EDEDEC]">
-                      {inspectedJob.currentOfferHemi.toFixed(4)} {tokenSymbolLabel}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
-                    <span className="text-[#63635E]">MAX CAP ESCROW</span>
-                    <span className="text-[#9A9A94]">
-                      {inspectedJob.maxOfferHemi.toFixed(4)} {tokenSymbolLabel}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
-                    <span className="text-[#63635E]">RAMP CURVE / WINDOW</span>
-                    <span className="text-[#EDEDEC]">
-                      {inspectedJob.curveType === 1 ? "QUADRATIC [1]" : "LINEAR [0]"} •{" "}
-                      {formatDurationSecs(inspectedJob.elapsedSecs)} /{" "}
-                      {formatDurationSecs(inspectedJob.rampUpPeriodSecs)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
-                    <span className="text-[#63635E]">CLAIM GATE BLOCK</span>
-                    <span className="text-[#9A9A94]">#{claimGateBlock.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
+              {/* Datasheet Section 2: Interactive Auction Curve & Escalation Scrubber */}
+              {(() => {
+                const maxRampSecs = Math.max(1, inspectedJob.rampUpPeriodSecs);
+                const activeCurve: 0 | 1 = scrubCurveType ?? inspectedJob.curveType;
+                const activeElapsed = Math.max(
+                  0,
+                  Math.min(maxRampSecs, scrubElapsedSecs ?? inspectedJob.elapsedSecs)
+                );
+                const isScrubbing =
+                  scrubElapsedSecs !== null || scrubCurveType !== null;
+                const activeOffer = isScrubbing
+                  ? computeEscalatingOffer(
+                      inspectedJob.minOfferHemi,
+                      inspectedJob.maxOfferHemi,
+                      maxRampSecs,
+                      activeElapsed,
+                      activeCurve
+                    )
+                  : inspectedJob.currentOfferHemi;
+                const linearOfferAtT = computeEscalatingOffer(
+                  inspectedJob.minOfferHemi,
+                  inspectedJob.maxOfferHemi,
+                  maxRampSecs,
+                  activeElapsed,
+                  0
+                );
+                const quadOfferAtT = computeEscalatingOffer(
+                  inspectedJob.minOfferHemi,
+                  inspectedJob.maxOfferHemi,
+                  maxRampSecs,
+                  activeElapsed,
+                  1
+                );
+                const rampRatio =
+                  inspectedJob.maxOfferHemi > inspectedJob.minOfferHemi
+                    ? (activeOffer - inspectedJob.minOfferHemi) /
+                      (inspectedJob.maxOfferHemi - inspectedJob.minOfferHemi)
+                    : 1;
+                const scrubberAscii = renderAsciiBlocks(rampRatio, 14);
+                const filledCount = Math.round(
+                  Math.max(0, Math.min(1, rampRatio)) * 14
+                );
+                const hemiPerMillionCyc =
+                  inspectedJob.expectedCycles > 0
+                    ? activeOffer / (inspectedJob.expectedCycles / 1_000_000)
+                    : 0;
 
-              {/* Datasheet Section 3: Execution Constraints */}
-              <div className="space-y-2.5 p-4 font-mono text-xs tabular-nums">
-                <div className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
+                return (
+                  <div className="font-mono text-xs tabular-nums">
+                    <div className="flex items-center justify-between border-b border-[#232320] bg-[#111110] px-4 py-2 text-[11px] uppercase tracking-[0.12em] text-[#63635E]">
+                      <span>02 // AUCTION CURVE &amp; TIME SCRUBBER</span>
+                      {isScrubbing ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setScrubElapsedSecs(null);
+                            setScrubCurveType(null);
+                          }}
+                          className="text-[10px] font-semibold text-[#FF5500] hover:text-[#EDEDEC]"
+                        >
+                          [RESET LIVE]
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-[#9A9A94]">LIVE TRACKING</span>
+                      )}
+                    </div>
+
+                    <div className="divide-y divide-[#232320] bg-[#0B0B0A] text-[11px]">
+                      {/* Interactive Time Scrubber & Curve Comparator Control */}
+                      <div className="space-y-2 px-4 py-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] uppercase tracking-wider text-[#63635E]">
+                            CURVE MODEL
+                          </span>
+                          <div className="inline-flex rounded-[2px] border border-[#232320] bg-[#111110] p-0.5 text-[10px]">
+                            {(
+                              [
+                                { id: 0 as const, label: "LINEAR [0]" },
+                                { id: 1 as const, label: "QUADRATIC [1]" },
+                              ] as const
+                            ).map((c) => {
+                              const selected = activeCurve === c.id;
+                              return (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() => setScrubCurveType(c.id)}
+                                  className={cn(
+                                    "rounded-[2px] px-2 py-0.5 uppercase tracking-wider transition-colors",
+                                    selected
+                                      ? "bg-[#181816] font-semibold text-[#EDEDEC] shadow-[inset_0_-1px_0_0_#FF5500]"
+                                      : "text-[#63635E] hover:text-[#9A9A94]"
+                                  )}
+                                >
+                                  {c.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-[#9A9A94]">
+                            T = {formatDurationSecs(activeElapsed)} /{" "}
+                            {formatDurationSecs(maxRampSecs)} (
+                            {Math.round((activeElapsed / maxRampSecs) * 100)}%)
+                          </span>
+                          <span className="tracking-[0.06em]">
+                            <span className="text-[#FF5500]">
+                              {scrubberAscii.slice(0, filledCount)}
+                            </span>
+                            <span className="text-[#63635E]">
+                              {scrubberAscii.slice(filledCount)}
+                            </span>
+                          </span>
+                        </div>
+
+                        <input
+                          type="range"
+                          min={0}
+                          max={maxRampSecs}
+                          step={Math.max(1, Math.floor(maxRampSecs / 120))}
+                          value={activeElapsed}
+                          aria-label="Scrub Reverse Dutch Auction elapsed seconds"
+                          onChange={(e) => setScrubElapsedSecs(Number(e.target.value))}
+                          className="h-1.5 w-full cursor-pointer appearance-none rounded-none bg-[#232320] accent-[#FF5500]"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between px-4 py-2">
+                        <span className="text-[#63635E]">
+                          {isScrubbing ? "SCRUBBED OFFER @ T" : "CURRENT OFFER"}
+                        </span>
+                        <span className="font-semibold text-[#EDEDEC]">
+                          {activeOffer.toFixed(4)} {tokenSymbolLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between px-4 py-2">
+                        <span className="text-[#63635E]">START MIN / MAX CAP</span>
+                        <span className="text-[#9A9A94]">
+                          {inspectedJob.minOfferHemi.toFixed(2)} &rarr;{" "}
+                          {inspectedJob.maxOfferHemi.toFixed(2)} {tokenSymbolLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between px-4 py-2">
+                        <span className="text-[#63635E]">LIN [0] VS QUAD [1] @ T</span>
+                        <span className="text-[#9A9A94]">
+                          {linearOfferAtT.toFixed(3)} vs {quadOfferAtT.toFixed(3)}{" "}
+                          {tokenSymbolLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between px-4 py-2">
+                        <span className="text-[#63635E]">YIELD PER 1M CYCLES</span>
+                        <span className="text-[#EDEDEC]">
+                          {hemiPerMillionCyc.toFixed(4)} {tokenSymbolLabel} / 1M CYC
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between px-4 py-2">
+                        <span className="text-[#63635E]">CLAIM GATE BLOCK</span>
+                        <span className="text-[#9A9A94]">
+                          #{claimGateBlock.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Datasheet Section 3: Execution Constraints (Flush Edge-to-Edge) */}
+              <div className="font-mono text-xs tabular-nums">
+                <div className="border-b border-[#232320] bg-[#111110] px-4 py-2 text-[11px] uppercase tracking-[0.12em] text-[#63635E]">
                   03 // EXECUTION CONSTRAINTS
                 </div>
-                <div className="divide-y divide-[#232320] border border-[#232320] bg-[#0B0B0A] text-[11px]">
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
+                <div className="divide-y divide-[#232320] bg-[#0B0B0A] text-[11px]">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">MAX_CYCLES (DECLARED)</span>
                     <span className="text-[#EDEDEC]">
                       {inspectedJob.expectedCycles.toLocaleString()}
                     </span>
                   </div>
                   {inspectedJob.actualCycles !== undefined && (
-                    <div className="flex items-center justify-between px-2.5 py-1.5">
+                    <div className="flex items-center justify-between px-4 py-2">
                       <span className="text-[#63635E]">ACTUAL_CYCLES (VERIFIED)</span>
                       <span className="font-semibold text-[#10B981]">
                         {inspectedJob.actualCycles.toLocaleString()}
                       </span>
                     </div>
                   )}
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">KECCAK_CHARGES</span>
                     <span className="text-[#9A9A94]">
                       {estimatedKeccakCharges > 0
@@ -1130,7 +1264,7 @@ export default function MarketplacePage() {
                         : "0 (NATIVE / PRECOMPILE)"}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">TARGET ROUTER</span>
                     <span className="text-[#9A9A94]">
                       {deployment.router
@@ -1138,7 +1272,7 @@ export default function MarketplacePage() {
                         : "STAGED (PRE-DEPLOYMENT)"}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">
                       CALLER ({inspectedJob.requesterType.toUpperCase()})
                     </span>
@@ -1149,13 +1283,13 @@ export default function MarketplacePage() {
                 </div>
               </div>
 
-              {/* Datasheet Section 4: On-Chain Verification Receipt */}
-              <div className="space-y-2.5 p-4 font-mono text-xs tabular-nums">
-                <div className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
+              {/* Datasheet Section 4: On-Chain Verification Receipt (Flush Edge-to-Edge) */}
+              <div className="font-mono text-xs tabular-nums">
+                <div className="border-b border-[#232320] bg-[#111110] px-4 py-2 text-[11px] uppercase tracking-[0.12em] text-[#63635E]">
                   04 // ON-CHAIN VERIFICATION RECEIPT
                 </div>
-                <div className="divide-y divide-[#232320] border border-[#232320] bg-[#0B0B0A] text-[11px]">
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
+                <div className="divide-y divide-[#232320] bg-[#0B0B0A] text-[11px]">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">ASSIGNED PROVER</span>
                     <span className="text-[#EDEDEC]">
                       {inspectedJob.proverAddress
@@ -1164,14 +1298,14 @@ export default function MarketplacePage() {
                     </span>
                   </div>
                   {inspectedJob.proverGpuHint && (
-                    <div className="flex items-center justify-between px-2.5 py-1.5">
+                    <div className="flex items-center justify-between px-4 py-2">
                       <span className="text-[#63635E]">WORKER TELEMETRY</span>
                       <span className="text-[#9A9A94]">{inspectedJob.proverGpuHint}</span>
                     </div>
                   )}
                   {inspectedJob.settlementSecs !== undefined &&
                     inspectedJob.settlementSecs > 0 && (
-                      <div className="flex items-center justify-between px-2.5 py-1.5">
+                      <div className="flex items-center justify-between px-4 py-2">
                         <span className="text-[#63635E]">SETTLEMENT TIME</span>
                         <span className="text-[#10B981]">
                           {inspectedJob.settlementSecs.toFixed(1)}s
@@ -1179,7 +1313,7 @@ export default function MarketplacePage() {
                       </div>
                     )}
                   {inspectedJob.txHash && (
-                    <div className="flex items-center justify-between px-2.5 py-1.5">
+                    <div className="flex items-center justify-between px-4 py-2">
                       <span className="text-[#63635E]">SUBMIT_TX</span>
                       {!inspectedJob.isSimulatedStream ? (
                         <a
@@ -1199,7 +1333,7 @@ export default function MarketplacePage() {
                     </div>
                   )}
                   {inspectedJob.fulfillTxHash && (
-                    <div className="flex items-center justify-between px-2.5 py-1.5">
+                    <div className="flex items-center justify-between px-4 py-2">
                       <span className="text-[#63635E]">FULFILL_TX</span>
                       {!inspectedJob.isSimulatedStream ? (
                         <a
@@ -1221,7 +1355,7 @@ export default function MarketplacePage() {
                 </div>
 
                 {deployment.router ? (
-                  <div className="pt-1">
+                  <div className="border-t border-[#232320] bg-[#111110] p-3">
                     <a
                       href={`${deployment.explorerUrl}/address/${deployment.router}`}
                       target="_blank"
@@ -1236,7 +1370,7 @@ export default function MarketplacePage() {
                     </a>
                   </div>
                 ) : (
-                  <div className="pt-1 text-center text-[10px] uppercase tracking-wider text-[#63635E]">
+                  <div className="border-t border-[#232320] bg-[#111110] px-4 py-2.5 text-center text-[10px] uppercase tracking-wider text-[#63635E]">
                     MAINNET 43111 ROUTER LINK STAGED (PRE-DEPLOYMENT)
                   </div>
                 )}

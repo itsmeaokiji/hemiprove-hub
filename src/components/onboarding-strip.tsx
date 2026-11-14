@@ -1,10 +1,24 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Check, Copy } from "lucide-react";
 import { useHemiNetwork } from "@/components/providers";
 import { cn } from "@/lib/utils";
+
+const QUICK_CLI_COMMANDS = [
+  {
+    id: "benchmark",
+    label: "BENCHMARK GPU",
+    cmd: "zkminer benchmark --json",
+  },
+  {
+    id: "simulate",
+    label: "SIMULATE ELF",
+    cmd: "zkminer simulate --elf <ELF_URI> --zkvm risc0 --json",
+  },
+] as const;
 
 const FIELD_GUIDE_COLUMNS = [
   {
@@ -58,6 +72,13 @@ export function OnboardingStrip() {
   const pathname = usePathname();
   const { guideDismissed, setGuideDismissed, fieldGuideOpen, setFieldGuideOpen } =
     useHemiNetwork();
+  const [copiedCmdId, setCopiedCmdId] = useState<string | null>(null);
+
+  const handleCopyCli = (id: string, cmd: string) => {
+    navigator.clipboard?.writeText(cmd);
+    setCopiedCmdId(id);
+    setTimeout(() => setCopiedCmdId(null), 1400);
+  };
 
   if (guideDismissed && !fieldGuideOpen) return null;
 
@@ -167,6 +188,30 @@ export function OnboardingStrip() {
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#232320] bg-[#0B0B0A] px-3 py-2 font-mono text-[11px] tabular-nums sm:px-4">
+            <span className="text-[10px] uppercase tracking-[0.12em] text-[#63635E]">
+              04 // ZKMINER CLI QUICK COPY
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              {QUICK_CLI_COMMANDS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleCopyCli(item.id, item.cmd)}
+                  className="inline-flex items-center gap-2 rounded-[2px] border border-[#232320] bg-[#111110] px-2.5 py-1 text-[11px] text-[#EDEDEC] transition-colors hover:border-[#FF5500] hover:bg-[#181816]"
+                >
+                  <span className="text-[10px] text-[#63635E]">{item.label}:</span>
+                  <code>{item.cmd}</code>
+                  {copiedCmdId === item.id ? (
+                    <Check className="h-3 w-3 text-[#10B981]" />
+                  ) : (
+                    <Copy className="h-3 w-3 text-[#63635E]" />
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         </section>
       )}
