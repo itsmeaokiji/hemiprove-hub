@@ -143,11 +143,12 @@ export default function MarketplacePage() {
   }, [statusFilter, zkvmFilter, searchQuery, selectedJobId, mobilePane]);
 
   useEffect(() => {
+    if (!liveStreamEnabled) return;
     const interval = setInterval(() => {
       setTickSecs((prev) => prev + 1);
     }, 1_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [liveStreamEnabled]);
 
   const { data, isFetching } = useQuery<MarketplaceApiResponse>({
     queryKey: ["marketplace", networkKey],
@@ -1170,22 +1171,29 @@ export default function MarketplacePage() {
                         </div>
 
                         <div className="flex items-center justify-between text-[11px]">
-                          <span className="text-[#9A9A94]">
+                          <label
+                            htmlFor="dutch-auction-scrubber"
+                            className="text-[#9A9A94]"
+                          >
                             T = {formatDurationSecs(activeElapsed)} /{" "}
                             {formatDurationSecs(maxRampSecs)} (
                             {Math.round((activeElapsed / maxRampSecs) * 100)}%)
-                          </span>
-                          <span className="tracking-[0.06em]">
+                          </label>
+                          <output
+                            htmlFor="dutch-auction-scrubber"
+                            className="tracking-[0.06em]"
+                          >
                             <span className="text-[#FF5500]">
                               {scrubberAscii.slice(0, filledCount)}
                             </span>
                             <span className="text-[#63635E]">
                               {scrubberAscii.slice(filledCount)}
                             </span>
-                          </span>
+                          </output>
                         </div>
 
                         <input
+                          id="dutch-auction-scrubber"
                           type="range"
                           min={0}
                           max={maxRampSecs}
@@ -1195,15 +1203,19 @@ export default function MarketplacePage() {
                           onChange={(e) => setScrubElapsedSecs(Number(e.target.value))}
                           className="h-1.5 w-full cursor-pointer appearance-none rounded-none bg-[#232320] accent-[#FF5500]"
                         />
+
                       </div>
 
                       <div className="flex items-center justify-between px-4 py-2">
                         <span className="text-[#63635E]">
                           {isScrubbing ? "SCRUBBED OFFER @ T" : "CURRENT OFFER"}
                         </span>
-                        <span className="font-semibold text-[#EDEDEC]">
+                        <output
+                          htmlFor="dutch-auction-scrubber"
+                          className="font-semibold text-[#EDEDEC]"
+                        >
                           {activeOffer.toFixed(4)} {tokenSymbolLabel}
-                        </span>
+                        </output>
                       </div>
                       <div className="flex items-center justify-between px-4 py-2">
                         <span className="text-[#63635E]">START MIN / MAX CAP</span>

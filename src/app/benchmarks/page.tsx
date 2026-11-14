@@ -927,9 +927,9 @@ export default function BenchmarksPage() {
 
           {railMode === "roi" ? (
             <div className="flex flex-col divide-y divide-[#232320] font-mono text-xs tabular-nums">
-              {/* Selected Hardware Telemetry Header */}
-              <div className="space-y-2 p-4">
-                <div className="flex items-center justify-between gap-2">
+              {/* Selected Hardware Telemetry Header (Flush Edge-to-Edge, No Nested Cards) */}
+              <div>
+                <div className="flex items-center justify-between gap-2 border-b border-[#232320] bg-[#111110] px-4 py-2">
                   <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
                     01 // SELECTED HARDWARE UNIT
                   </span>
@@ -946,41 +946,44 @@ export default function BenchmarksPage() {
                     </button>
                   </div>
                 </div>
-                <select
-                  value={selectedGpu.id}
-                  onChange={(e) => setSelectedGpuId(e.target.value)}
-                  className="h-8 w-full rounded-[2px] border border-[#232320] bg-[#0B0B0A] px-2.5 font-mono text-xs text-[#EDEDEC] focus:border-[#FF5500] focus:outline-none"
-                >
-                  {allEntries.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.shortModel} [{item.zkvm.toUpperCase()}] —{" "}
-                      {formatZkops(item.zkops)} zkOP/s ({item.os})
-                    </option>
-                  ))}
-                </select>
 
-                <div className="divide-y divide-[#232320] border border-[#232320] bg-[#0B0B0A] text-[11px]">
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
+                <div className="divide-y divide-[#232320] bg-[#0B0B0A] text-[11px]">
+                  <div className="p-3">
+                    <select
+                      aria-label="Select GPU hardware unit"
+                      value={selectedGpu.id}
+                      onChange={(e) => setSelectedGpuId(e.target.value)}
+                      className="h-8 w-full rounded-[2px] border border-[#232320] bg-[#111110] px-2.5 font-mono text-xs text-[#EDEDEC] focus:border-[#FF5500] focus:outline-none"
+                    >
+                      {allEntries.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.shortModel} [{item.zkvm.toUpperCase()}] —{" "}
+                          {formatZkops(item.zkops)} zkOP/s ({item.os})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">ARCH / VRAM</span>
                     <span className="text-[#EDEDEC]">
                       {selectedGpu.arch} • {selectedGpu.vramGb}GB
                     </span>
                   </div>
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">STARK / GROTH16 WRAP</span>
                     <span className="text-[#9A9A94]">
                       {formatCycleRate(selectedGpu.starkRateCyclesPerSec)} •{" "}
                       {selectedGpu.groth16WrapSecs}s
                     </span>
                   </div>
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">TDP / MSRP</span>
                     <span className="text-[#9A9A94]">
                       {selectedGpu.tdpWatts}W • ${selectedGpu.msrpUsd}
                     </span>
                   </div>
                   {(selectedGpu.pcieLink || selectedGpu.telemetrySource) && (
-                    <div className="flex items-center justify-between px-2.5 py-1.5">
+                    <div className="flex items-center justify-between px-4 py-2">
                       <span className="text-[#63635E]">SLOT LINK / TELEMETRY</span>
                       <span className="text-[#EDEDEC]">
                         {[selectedGpu.pcieLink, selectedGpu.telemetrySource]
@@ -989,7 +992,7 @@ export default function BenchmarksPage() {
                       </span>
                     </div>
                   )}
-                  <div className="flex items-center justify-between px-2.5 py-1.5">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">MERKLE (15%) / ZKOP-MIX</span>
                     <span className="text-[#9A9A94]">
                       {(selectedGpu.workloads?.["memory-merkle"] ?? 0).toFixed(2)}s •{" "}
@@ -1133,9 +1136,9 @@ export default function BenchmarksPage() {
                 </div>
               </div>
 
-              {/* Datasheet Yield & Power Breakdown */}
-              <div className="space-y-2.5 p-4">
-                <div className="flex items-center justify-between">
+              {/* Datasheet Yield & Power Breakdown (Flush Edge-to-Edge, No Nested Cards) */}
+              <div>
+                <div className="flex items-center justify-between border-b border-[#232320] bg-[#111110] px-4 py-2">
                   <span className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#63635E]">
                     03 // TELEMETRY &amp; YIELD PROJECTION
                   </span>
@@ -1143,8 +1146,8 @@ export default function BenchmarksPage() {
                     {networkKey === "sepolia" ? "743111 REHEARSAL" : "43111 MODEL"}
                   </span>
                 </div>
-                <div className="divide-y divide-[#232320] border border-[#232320] bg-[#0B0B0A] text-[11px]">
-                  <div className="flex items-center justify-between px-2.5 py-2">
+                <div className="divide-y divide-[#232320] bg-[#0B0B0A] text-[11px]">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="inline-flex items-center text-[#63635E]">
                       <span>RIG THROUGHPUT ({roiStats.safeCards}X)</span>
                       <InfoTip
@@ -1156,32 +1159,32 @@ export default function BenchmarksPage() {
                       {roiStats.rigZkops.toLocaleString()} zkOP/s
                     </span>
                   </div>
-                  <div className="flex items-center justify-between px-2.5 py-2">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">NETWORK ZKOP/S SHARE</span>
                     <span className="text-[#EDEDEC]">
                       {roiStats.networkSharePct.toFixed(3)}%
                     </span>
                   </div>
-                  <div className="flex items-center justify-between px-2.5 py-2">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">DAILY POWER DRAW / COST</span>
                     <span className="text-[#9A9A94]">
                       {roiStats.dailyKwh.toFixed(1)} kWh • $
                       {roiStats.dailyPowerCostUsd.toFixed(2)}/d
                     </span>
                   </div>
-                  <div className="flex items-center justify-between px-2.5 py-2">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">PROJECTED DAILY {tokenLabel}</span>
                     <span className="font-semibold text-[#EDEDEC]">
                       {roiStats.dailyHemiGross.toFixed(2)} {tokenLabel}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between px-2.5 py-2">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">PROJECTED 30D {tokenLabel}</span>
                     <span className="text-[#9A9A94]">
                       {Math.round(roiStats.monthlyHemiGross).toLocaleString()} {tokenLabel}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between px-2.5 py-2">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">NET MARGIN (AFTER POWER)</span>
                     <span
                       className={cn(
@@ -1193,7 +1196,7 @@ export default function BenchmarksPage() {
                       {roiStats.monthlyNetUsd.toFixed(0)}/mo)
                     </span>
                   </div>
-                  <div className="flex items-center justify-between px-2.5 py-2">
+                  <div className="flex items-center justify-between px-4 py-2">
                     <span className="text-[#63635E]">EST. HARDWARE PAYBACK</span>
                     <span className="text-[#9A9A94]">
                       {roiStats.breakEvenDays ? `${roiStats.breakEvenDays} DAYS` : "N/A"}
@@ -1201,17 +1204,19 @@ export default function BenchmarksPage() {
                   </div>
                 </div>
 
-                {networkKey === "sepolia" && (
-                  <p className="font-sans text-[11px] leading-relaxed text-[#9A9A94]">
-                    Sepolia (<code className="font-mono text-[#EDEDEC]">743111</code>) settles
-                    live rehearsal auctions in <code className="font-mono text-[#EDEDEC]">tHEMI</code>;
-                    USD margin projects Mainnet HEMI parity at the reference rate above.
-                  </p>
-                )}
+                <div className="space-y-2 border-t border-[#232320] bg-[#111110] px-4 py-3">
+                  {networkKey === "sepolia" && (
+                    <p className="font-sans text-[11px] leading-relaxed text-[#9A9A94]">
+                      Sepolia (<code className="font-mono text-[#EDEDEC]">743111</code>) settles
+                      live rehearsal auctions in <code className="font-mono text-[#EDEDEC]">tHEMI</code>;
+                      USD margin projects Mainnet HEMI parity at the reference rate above.
+                    </p>
+                  )}
 
-                <p className="font-sans text-[11px] leading-relaxed text-[#63635E]">
-                  {selectedGpu.notes}
-                </p>
+                  <p className="font-sans text-[11px] leading-relaxed text-[#63635E]">
+                    {selectedGpu.notes}
+                  </p>
+                </div>
               </div>
             </div>
           ) : (

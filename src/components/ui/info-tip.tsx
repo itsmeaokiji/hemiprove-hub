@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
@@ -13,9 +13,11 @@ interface InfoTipProps {
 /**
  * Datasheet `[?]` micro-tooltip rendered via portal so parent `overflow-x-auto`
  * tables never clip the explanation. Strictly adheres to DESIGN.md (rounded-[2px],
- * 1px #232320 hairline border, #111110 matte carbon surface, zero drop shadows).
+ * 1px #232320 hairline border, #111110 matte carbon surface, zero drop shadows)
+ * and WCAG 1.4.13 (aria-describedby linkage + Escape dismissal).
  */
 export function InfoTip({ text, label = "Explain metric", className }: InfoTipProps) {
+  const tooltipId = useId();
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{
@@ -53,9 +55,26 @@ export function InfoTip({ text, label = "Explain metric", className }: InfoTipPr
     setOpen(true);
   };
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setOpen(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        handleClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", updatePosition, { passive: true, capture: true });
+    window.addEventListener("resize", updatePosition, { passive: true });
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [open, handleClose, updatePosition]);
 
   return (
     <>
@@ -63,6 +82,8 @@ export function InfoTip({ text, label = "Explain metric", className }: InfoTipPr
         ref={triggerRef}
         type="button"
         aria-label={label}
+        aria-expanded={open}
+        aria-describedby={open ? tooltipId : undefined}
         onMouseEnter={handleOpen}
         onMouseLeave={handleClose}
         onFocus={handleOpen}
@@ -84,6 +105,7 @@ export function InfoTip({ text, label = "Explain metric", className }: InfoTipPr
         coords &&
         createPortal(
           <div
+            id={tooltipId}
             role="tooltip"
             style={{
               position: "fixed",
