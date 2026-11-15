@@ -556,7 +556,7 @@ export function generateZkMinerCliScript(
 # Target Chain : ${sanitizeCommentText(dep.name)} [${dep.chainId}]
 # Target zkVM  : ${report.backend.toUpperCase()} (${sanitizeCommentText(report.sdkVersion)})
 # Program ID   : ${sanitizeBytes32(report.programId)}
-# Sized Cycles : ${Number(report.cycles).toLocaleString()} (${report.vramTierRecommendation})
+# Sized Cycles : ${Number(report.cycles).toLocaleString()} (${report.vramTierRecommendation.tierLabel})
 # Est. Auction : ${report.pricingRecommendation.minPriceHemi} -> ${report.pricingRecommendation.maxPriceHemi} ${tokenSymbol} (${report.pricingRecommendation.rampUpPeriodSecs}s ramp)
 # ==============================================================================
 
