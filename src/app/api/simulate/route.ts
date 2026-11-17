@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
+  buildZkMinerSimulateArgs,
+  extractZkMinerSimulateReportJson,
   mergeCliSimulateReport,
   runDeterministicSimulation,
   validateElfUri,
@@ -43,21 +45,14 @@ export async function POST(request: NextRequest) {
       programId: typeof body.programId === "string" ? body.programId : undefined,
     };
 
-    // Attempt local `zkminer simulate` binary if present and a 32-byte on-chain jobId is provided
+    // Attempt local `zkminer simulate --job <jobId>` binary if present and a 32-byte on-chain jobId is provided
     const zkminerBin = process.env.ZKMINER_BIN || "zkminer";
-    if (body.jobId && /^0x[0-9a-fA-F]{64}$/.test(body.jobId)) {
+    if (payload.jobId && /^0x[0-9a-fA-F]{64}$/.test(payload.jobId)) {
       try {
-        const args = ["simulate", body.jobId];
-        if (payload.singleRun) {
-          args.push("--po2", "20");
-        }
+        const args = buildZkMinerSimulateArgs(payload.jobId, payload.singleRun);
         const { stdout } = await execFileAsync(zkminerBin, args, { timeout: 8_000 });
-        const firstLine = stdout
-          .split(/\r?\n/)
-          .map((l) => l.trim())
-          .find((l) => l.startsWith("{"));
-        if (firstLine) {
-          const cliReport = JSON.parse(firstLine) as Record<string, unknown>;
+        const cliReport = extractZkMinerSimulateReportJson(stdout);
+        if (cliReport) {
           const base = runDeterministicSimulation(payload);
           return NextResponse.json({
             ok: true,

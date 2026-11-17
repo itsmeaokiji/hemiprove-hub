@@ -540,34 +540,40 @@ main().catch((err) => {
 export function generateZkMinerCliScript(
   report: SimulateReportJson,
   network: HemiNetworkKey,
-  rawStdin: string,
+  rawStdin = "",
   singleRun = false
 ): string {
   const dep = HEMIPROVE_DEPLOYMENTS[network];
   const routerAddr = dep.router ?? ZERO_ADDRESS;
   const safeElfUri = sanitizeCommentText(report.elfUri || "ar://unspecified");
-  const trimmedStdin = rawStdin.trim() || "0x00";
-  const singleFlag = singleRun ? " \\\n  --single" : "";
+  const safeJobId = sanitizeBytes32(report.jobId);
+  const safePo2 = report.po2 ?? 20;
+  const trimmedStdin = rawStdin.trim();
+  const stdinNote = trimmedStdin ? `${trimmedStdin.length} chars staged` : "empty";
+  const initNetwork = network === "sepolia" ? "testnet" : "mainnet";
   const tokenSymbol = network === "sepolia" ? "tHEMI" : "HEMI";
+  const singleRunHint = singleRun
+    ? `\n# PR #34 (max/sp1-measure-setup) --stdin option to skip the 7-size po2 sweep:\n# printf '{"jobId":"%s","singleRun":true}\\n' "${safeJobId}" | zkminer simulate --stdin --po2 ${safePo2}`
+    : "";
 
   return `#!/usr/bin/env bash
 # ==============================================================================
 # HEMIPROVE // ZKMINER CLI WORKBENCH COMMANDS (PROTOCOL V${report.protocolVersion})
 # Target Chain : ${sanitizeCommentText(dep.name)} [${dep.chainId}]
 # Target zkVM  : ${report.backend.toUpperCase()} (${sanitizeCommentText(report.sdkVersion)})
+# ELF URI      : ${safeElfUri} (${stdinNote})
 # Program ID   : ${sanitizeBytes32(report.programId)}
-# Sized Cycles : ${Number(report.cycles).toLocaleString()} (${report.vramTierRecommendation.tierLabel})
+# Sized Cycles : ${Number(report.cycles).toLocaleString()} (${sanitizeCommentText(report.vramTierRecommendation.tierLabel)})
 # Est. Auction : ${report.pricingRecommendation.minPriceHemi} -> ${report.pricingRecommendation.maxPriceHemi} ${tokenSymbol} (${report.pricingRecommendation.rampUpPeriodSecs}s ramp)
 # ==============================================================================
 
-# 01 // PRE-FLIGHT ELF SIZING & PROTOCOL 12 (RISC0-PUBLIC-V3) SEGMENT AUDIT
-# Runs guest execution without generating a Groth16/Plonk proof.
-# Outputs camelCase Report JSON (cycles, userCycles, keccakCycles, sizeCheck).
+# 01 // MEASURE AN ON-CHAIN JOB VIA ZKMINER SIMULATE
+# \`zkminer simulate\` measures submitted jobs by on-chain \`jobId\` (no \`--elf\` flag)
+# and prints one JSON Report line to stdout by default (cycles, po2, binding, proven, hostInput).
+# Pass a real submitted \`jobId\` from HemiProveRouter.submitJob (preview ID shown below).
 zkminer simulate \\
-  --elf "${safeElfUri}" \\
-  --zkvm ${report.backend} \\
-  --stdin "${sanitizeCommentText(trimmedStdin)}"${singleFlag} \\
-  --json
+  --job "${safeJobId}" \\
+  --po2 ${safePo2}${singleRunHint}
 
 # 02 // LOCAL GPU ZKOP/S & STARK THROUGHPUT BENCHMARK
 # Measures 50M-cycle zkop-mix (ZKOP_SP1_PER_RISC0 = 3.71x) across CUDA / ROCm / SYCL.
@@ -575,10 +581,10 @@ zkminer simulate \\
 zkminer benchmark --json
 
 # 03 // LAUNCH STAKED PROVER WORKER ON ${dep.shortName.toUpperCase()} [${dep.chainId}]
-# Polls HemiProveRouter (${routerAddr}) for open ${report.backend.toUpperCase()} auctions.
-zkminer prove \\
-  --rpc-url "${dep.rpcUrl}" \\
-  --router "${routerAddr}" \\
-  --zkvm ${report.backend}
+# Configure RPC/router (${routerAddr} @ ${dep.rpcUrl}) in ~/.zkminer/config.toml
+# (scaffold with \`zkminer init --network ${initNetwork}\`), then start the miner:
+zkminer run --headless
+# Watch market dry-run without staking or sending transactions:
+# zkminer run --watch-only
 `;
 }

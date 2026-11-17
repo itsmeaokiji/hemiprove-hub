@@ -661,7 +661,40 @@ function pickCycleString(
 }
 
 /**
- * Merges a JSON report emitted by `zkminer simulate <jobId>` (`crates/zkminer-cli/src/commands/simulate.rs`,
+ * Builds valid CLI arguments for `zkminer simulate --job <JOB_ID>` per `crates/zkminer-cli/src/main.rs`.
+ */
+export function buildZkMinerSimulateArgs(jobId: string, singleRun = false): string[] {
+  const args = ["simulate", "--job", jobId];
+  if (singleRun) {
+    args.push("--po2", "20");
+  }
+  return args;
+}
+
+/**
+ * Extracts the first `Report` JSON line from `zkminer simulate` stdout, skipping `--stdin` READY lines.
+ */
+export function extractZkMinerSimulateReportJson(
+  stdout: string
+): Record<string, unknown> | null {
+  for (const rawLine of stdout.split(/\r?\n/)) {
+    const trimmed = rawLine.trim();
+    if (!trimmed.startsWith("{")) continue;
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
+      const obj = parsed as Record<string, unknown>;
+      if (obj.ready === true && obj.outcome === undefined) continue;
+      return obj;
+    } catch {
+      // Ignore non-JSON diagnostic lines
+    }
+  }
+  return null;
+}
+
+/**
+ * Merges a JSON report emitted by `zkminer simulate --job <jobId>` (`crates/zkminer-cli/src/commands/simulate.rs`,
  * `REPORT_SCHEMA = 1`, PR #31 / PR #32 `c4ba622` / PR #34 `17b0211`) onto a deterministic baseline report
  * and recomputes all dependent sizing, VRAM tier, pricing, and 7-segment fields.
  */

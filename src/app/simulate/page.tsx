@@ -572,7 +572,7 @@ export default function SimulateStudioPage() {
             <div className="flex items-center justify-between rounded-[2px] border border-[#232320] bg-[#0B0B0A] px-3 py-2.5">
               <div>
                 <div className="text-[11px] font-medium uppercase text-[#EDEDEC]">
-                  --single-run
+                  SINGLE-RUN MODE
                 </div>
                 <div className="text-[10px] text-[#63635E]">
                   {targetZkvm === "risc0"

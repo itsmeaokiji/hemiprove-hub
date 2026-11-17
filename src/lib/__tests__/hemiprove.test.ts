@@ -36,6 +36,8 @@ import {
   TEST_SUBMIT_TX,
 } from "@/lib/__tests__/mock-logs";
 import {
+  buildZkMinerSimulateArgs,
+  extractZkMinerSimulateReportJson,
   KECCAK_CHARGE_PER_REQUEST,
   mergeCliSimulateReport,
   runDeterministicSimulation,
@@ -210,10 +212,36 @@ describe("simulate-engine & code-generator", () => {
     assert.match(viemScriptEven, /"0x1234" as Hex/);
 
     const cliScript = generateZkMinerCliScript(maliciousReport, "sepolia", "0x1234", true);
-    assert.match(cliScript, /zkminer simulate/);
-    assert.match(cliScript, /--single/);
+    assert.match(cliScript, /zkminer simulate \\/);
+    assert.match(cliScript, /--job "/);
+    assert.match(cliScript, /--po2 20/);
+    assert.match(cliScript, /singleRun":true/);
     assert.match(cliScript, /zkminer benchmark --json/);
-    assert.match(cliScript, /zkminer prove/);
+    assert.match(cliScript, /zkminer run --headless/);
+    assert.equal(cliScript.includes("zkminer prove"), false);
+    assert.equal(cliScript.includes(" --elf "), false);
+
+    assert.deepEqual(buildZkMinerSimulateArgs(TEST_JOB_ID, false), [
+      "simulate",
+      "--job",
+      TEST_JOB_ID,
+    ]);
+    assert.deepEqual(buildZkMinerSimulateArgs(TEST_JOB_ID, true), [
+      "simulate",
+      "--job",
+      TEST_JOB_ID,
+      "--po2",
+      "20",
+    ]);
+
+    const parsedCliStdout = extractZkMinerSimulateReportJson(
+      [
+        '{"schema":1,"ready":true,"backends":["risc0","sp1"]}',
+        `{"schema":1,"jobId":"${TEST_JOB_ID}","outcome":"measured","cycles":"1048576"}`,
+      ].join("\n")
+    );
+    assert.equal(parsedCliStdout?.outcome, "measured");
+    assert.equal(parsedCliStdout?.cycles, "1048576");
   });
 
   it("includes OpenVM exe/vm commitment encoding when targeting OpenVM", () => {

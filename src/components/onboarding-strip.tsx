@@ -15,8 +15,8 @@ const QUICK_CLI_COMMANDS = [
   },
   {
     id: "simulate",
-    label: "SIMULATE ELF",
-    cmd: "zkminer simulate --elf <ELF_URI> --zkvm risc0 --json",
+    label: "SIMULATE JOB",
+    cmd: "zkminer simulate --job <JOB_ID> --po2 20",
   },
 ] as const;
 

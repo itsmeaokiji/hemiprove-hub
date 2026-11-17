@@ -234,7 +234,7 @@ $$
 *(Concrete verification example — Preset #2 `DeFi LP Volatility Proof` at miner default `po2 = 20`: $C_{\text{guest}} = 41{,}200{,}000$, $K_{20} = \lceil 41.2\text{M} / 964{,}689.92 \rceil = 43$ segments, $C_{\text{padded}} = 43 \times 1{,}048{,}576 = 45{,}088{,}768$, $C_{\text{pad}} = 3{,}888{,}768$, $Q_{\text{keccak}} = 6 \Rightarrow C_{\text{keccak}} = 6{,}291{,}456$, yielding exact `report.cycles` $= 51{,}380{,}224$.)*
 
 **Cross-`po2` Consistency Invariant (`risc0-public-v3`):**
-Unless `--single-run` (`--po2 20` only) is enabled, every row $p \in \{16..22\}$ is compared against the reference miner baseline $p_{\text{ref}} = 20$:
+Unless `singleRun` (`--po2 20` only) is enabled, every row $p \in \{16..22\}$ is compared against the reference miner baseline $p_{\text{ref}} = 20$:
 
 $$
 \texttt{consistent}(p) \iff \begin{cases}
@@ -254,7 +254,7 @@ If any segment size violates this invariant (as demonstrated in Preset #3 `Segme
 
 #### C. Hybrid Local Binary + Deterministic Execution (`POST /api/simulate`)
 `src/app/api/simulate/route.ts` checks `process.env.ZKMINER_BIN || "zkminer"`:
-1. When a 32-byte hex `jobId` (`0x` + 64 hex chars) is provided and `zkminer` is installed locally, it executes `zkminer simulate <jobId> [--po2 20]` (`8,000 ms` timeout), maps the `crates/zkminer-cli/src/commands/simulate.rs` `Report` JSON (`REPORT_SCHEMA = 1`, including `sizeCheck: "same" | "differs" | "skipped"`, `userCycles`, `keccakCycles`, `hostInputReads`, `sysRandRule`, `inputBytes`, and `po2`), recomputes all dependent sizing/pricing/VRAM fields via `mergeCliSimulateReport()`, and returns `executionEngine: "zkminer-cli-binary"`. If the CLI reports a non-measured `outcome` (such as `no_worker` or `no_program`), it preserves the deterministic pre-flight sizing and surfaces the CLI outcome reason in `warnings`.
+1. When a 32-byte hex `jobId` (`0x` + 64 hex chars) is provided and `zkminer` is installed locally, it executes `zkminer simulate --job <jobId> [--po2 20]` (`8,000 ms` timeout), maps the `crates/zkminer-cli/src/commands/simulate.rs` `Report` JSON (`REPORT_SCHEMA = 1`, including `cycles`, `po2`, `binding`, `proven`, `hostInput`, `hostInputReads`, `inputBytes`, plus PR #34's `sizeCheck: "same" | "differs" | "skipped"` and `sysRandRule`, and optional `userCycles`/`keccakCycles` breakdown fields when present), recomputes all dependent sizing/pricing/VRAM fields via `mergeCliSimulateReport()`, and returns `executionEngine: "zkminer-cli-binary"`. If the CLI reports a non-measured `outcome` (such as `no_worker` or `no_program`), it preserves the deterministic pre-flight sizing and surfaces the CLI outcome reason in `warnings`.
 2. In serverless / browser-only deployments without a local GPU binary, it falls back seamlessly to `runDeterministicSimulation()` (`executionEngine: "deterministic-analyzer"`), which is also shared directly with `/` so job cycle breakdowns match 1:1 across pages.
 
 ---

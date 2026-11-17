@@ -29,7 +29,7 @@ Built directly against the ABIs, deployment pins (`zkmarket@c8333aa`), and Proto
 - **CLI & JSON Ingestion:** Parses raw `zkminer benchmark` CLI tables (including blended dual-zkVM `MzkOP/s` output) and `--json` reports with deterministic deduplicated IDs.
 
 ### `[03]` Pre-Flight Sizing & Codegen Studio (`/simulate`)
-- **Transparent Execution Engine:** Clearly labels serverless deterministic sizing (`ENGINE: DETERMINISTIC MODEL (PREVIEW)`) vs. local `ZKMINER_BIN` CLI execution (`zkminer simulate <jobId>`).
+- **Transparent Execution Engine:** Clearly labels serverless deterministic sizing (`ENGINE: DETERMINISTIC MODEL (PREVIEW)`) vs. local `ZKMINER_BIN` CLI execution (`zkminer simulate --job <jobId>`).
 - **Cycle Accounting & 7-Segment Matrix:** Breaks down guest cycles, power-of-two segment padding, and Keccak charges, evaluating `po2 = 16..22` determinism against the `po2 = 20` baseline (`sizeCheck`, `SYS_RANDOM`).
 - **Starter Contract & SDK Export:** Generates hardened `Solidity ^0.8.24` contracts (`onlyOwner`, `transferFrom` escrow, OpenVM/Mainnet guards) and standalone `viem` submitter scripts. *(See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for all protocol formulas.)*
 
